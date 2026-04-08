@@ -1,0 +1,36 @@
+name: Sync Upstream Test
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-test-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream test into fork test
+        run: |
+          set -euo pipefail
+
+          # Добавляем upstream руководителя и забираем только нужную ветку.
+          git remote add upstream https://github.com/vldsmelov/converter.git 2>/dev/null || true
+          git fetch upstream test
+
+          # Делаем fork/test зеркалом upstream/test.
+          git checkout -B test FETCH_HEAD
+          git push --force origin test
