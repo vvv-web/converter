@@ -1,0 +1,194 @@
+# VPS: полный upstream + публичные URL за nginx (TLS на хосте).
+# Запуск из корня репозитория:
+#   docker compose -f docker-compose.vps.yml --env-file deploy/vps/.env up -d --build
+# Затем one-shot: docker compose -f docker-compose.vps.yml --env-file deploy/vps/.env run --rm seed
+#
+# Порты только на 127.0.0.1 — снаружи только nginx :443.
+
+name: converter
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "127.0.0.1:25672:5672"
+      - "127.0.0.1:25673:15672"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio12345}
+    ports:
+      - "127.0.0.1:29000:9000"
+      - "127.0.0.1:29001:9001"
+    volumes:
+      - minio_data:/data
+
+  keycloak_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_db:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: ["start-dev", "--import-realm", "--http-relative-path=/auth"]
+    environment:
+      # Полный публичный URL (issuer в JWT и .well-known без :8080)
+      KC_HOSTNAME_URL: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
+      KC_HOSTNAME_ADMIN_URL: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak_db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ./deploy/vps/keycloak-import:/opt/keycloak/data/import
+    depends_on:
+      - keycloak_db
+
+  nsi_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nsi
+      POSTGRES_USER: nsi
+      POSTGRES_PASSWORD: nsi
+    volumes:
+      - nsi_db:/var/lib/postgresql/data
+
+  documents_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: documents
+      POSTGRES_USER: documents
+      POSTGRES_PASSWORD: documents
+    volumes:
+      - documents_db:/var/lib/postgresql/data
+
+  nsi:
+    build: ./services/nsi
+    environment:
+      DJANGO_SECRET_KEY: ${NSI_DJANGO_SECRET_KEY}
+      DATABASE_URL: postgres://nsi:nsi@nsi_db:5432/nsi
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: "*"
+      CORS_ALLOWED_ORIGINS: ${CONVERTER_PUBLIC_ORIGIN:-https://converter.acom-offer-desk.ru}
+      KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom},http://keycloak:8080/auth/realms/uom
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_BASE_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_REALM: uom
+      KEYCLOAK_ADMIN_AUTH_REALM: master
+      KEYCLOAK_ADMIN_CLIENT_ID: admin-cli
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "127.0.0.1:18001:8000"
+    depends_on:
+      - nsi_db
+      - keycloak
+    command: >-
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./services/nsi:/app
+
+  documents:
+    build: ./services/documents
+    environment:
+      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY}
+      DATABASE_URL: postgres://documents:documents@documents_db:5432/documents
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: "*"
+      KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom},http://keycloak:8080/auth/realms/uom
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/certs
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CONVERSION_BASE_URL: http://conversion:8000
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/token
+      S2S_CLIENT_ID: documents-service
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CONVERTER_PUBLIC_ORIGIN:-https://converter.acom-offer-desk.ru}
+      MINIO_PUBLIC_ENDPOINT: ${CONVERTER_FQDN:-converter.acom-offer-desk.ru}
+      MINIO_PUBLIC_SECURE: "1"
+      MINIO_INTERNAL_ENDPOINT: minio:9000
+    ports:
+      - "127.0.0.1:18002:8000"
+    depends_on:
+      - documents_db
+      - rabbitmq
+      - keycloak
+      - minio
+    command: >-
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./services/documents:/app
+
+  documents_worker:
+    build: ./services/documents
+    environment:
+      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY}
+      DATABASE_URL: postgres://documents:documents@documents_db:5432/documents
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: "*"
+      KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom},http://keycloak:8080/auth/realms/uom
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/certs
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CONVERSION_BASE_URL: http://conversion:8000
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/token
+      S2S_CLIENT_ID: documents-service
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET}
+      MINIO_INTERNAL_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: ${CONVERTER_FQDN:-converter.acom-offer-desk.ru}
+      MINIO_PUBLIC_SECURE: "1"
+    depends_on:
+      - documents_db
+      - rabbitmq
+    command: >-
+      sh -c "python manage.py migrate && celery -A documents_service worker -l info"
+    volumes:
+      - ./services/documents:/app
+
+  conversion:
+    build: ./services/conversion
+    environment:
+      NSI_BASE_URL: http://nsi:8000
+      KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom},http://keycloak:8080/auth/realms/uom
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/certs
+    ports:
+      - "127.0.0.1:18003:8000"
+    depends_on:
+      - nsi
+
+  seed:
+    build: ./services/seed
+    environment:
+      # Keycloak с KC_HTTP_RELATIVE_PATH=/auth
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      NSI_URL: http://nsi:8000
+      DOCS_URL: http://documents:8000
+      SEED_USERNAME: operator
+      SEED_PASSWORD: operator
+      SEED_CLIENT_ID: uom-cli
+    depends_on:
+      - keycloak
+      - nsi
+      - documents
+    restart: "no"
+
+volumes:
+  keycloak_db:
+  nsi_db:
+  documents_db:
+  minio_data:

@@ -1,0 +1,152 @@
+{
+  "realm": "uom",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "nsi.ping" },
+      { "name": "documents.ping" },
+      { "name": "conversion.ping" },
+
+      { "name": "nsi.uom.read" },
+      { "name": "nsi.uom.write" },
+      { "name": "nsi.item.read" },
+      { "name": "nsi.item.write" },
+      { "name": "nsi.package.read" },
+      { "name": "nsi.package.write" },
+      { "name": "nsi.rule.read" },
+      { "name": "nsi.rule.write" },
+      { "name": "nsi.default_field.write" },
+
+      { "name": "conversion.convert" },
+
+      { "name": "documents.invoice.read" },
+      { "name": "documents.invoice.write" },
+      { "name": "documents.invoice.calculate" },
+      { "name": "documents.invoice.generate" },
+      { "name": "documents.feedback.read" },
+      { "name": "documents.feedback.write" },
+
+      { "name": "system.admin" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "uom-cli",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    },
+    {
+      "clientId": "documents-service",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "secret": "__SET_DOCUMENTS_SERVICE_SECRET__"
+    },
+    {
+      "clientId": "frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "https://converter.acom-offer-desk.ru",
+      "baseUrl": "/",
+      "redirectUris": ["https://converter.acom-offer-desk.ru/*"],
+      "webOrigins": ["https://converter.acom-offer-desk.ru"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "operator",
+      "enabled": true,
+      "email": "test@test.test",
+      "emailVerified": true,
+      "firstName": "Operator",
+      "lastName": "Operatov",
+      "credentials": [
+        { "type": "password", "value": "__SET_OPERATOR_PASSWORD__", "temporary": false }
+      ],
+      "realmRoles": [
+        "nsi.ping",
+        "documents.ping",
+        "conversion.ping",
+
+        "conversion.convert",
+
+        "nsi.uom.read",
+        "nsi.uom.write",
+        "nsi.item.read",
+        "nsi.item.write",
+        "nsi.package.read",
+        "nsi.package.write",
+        "nsi.rule.read",
+        "nsi.rule.write",
+        "nsi.default_field.write",
+
+        "documents.invoice.read",
+        "documents.invoice.write",
+        "documents.invoice.calculate",
+        "documents.invoice.generate"
+      ]
+    },
+    {
+      "username": "administrator",
+      "enabled": true,
+      "email": "admin@test.test",
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Administrator",
+      "credentials": [
+        { "type": "password", "value": "__SET_ADMIN_PASSWORD__", "temporary": false }
+      ],
+      "realmRoles": [
+        "nsi.ping",
+        "documents.ping",
+        "conversion.ping",
+
+        "conversion.convert",
+
+        "nsi.uom.read",
+        "nsi.uom.write",
+        "nsi.item.read",
+        "nsi.item.write",
+        "nsi.package.read",
+        "nsi.package.write",
+        "nsi.rule.read",
+        "nsi.rule.write",
+        "nsi.default_field.write",
+
+        "documents.invoice.read",
+        "documents.invoice.write",
+        "documents.invoice.calculate",
+        "documents.invoice.generate",
+
+        "system.admin"
+      ]
+    },
+    {
+      "username": "service-account-documents-service",
+      "enabled": true,
+      "serviceAccountClientId": "documents-service",
+      "realmRoles": [
+        "conversion.convert",
+        "conversion.ping",
+        "nsi.uom.read",
+        "nsi.item.read",
+        "nsi.rule.read",
+        "nsi.package.read"
+      ]
+    }
+  ]
+}

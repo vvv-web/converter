@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!deploy/vps/.env.example
 
 # ---------- Python ----------
 __pycache__/

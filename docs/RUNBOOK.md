@@ -1,5 +1,24 @@
 # RUNBOOK
 
+## 0. Live-контур на VPS
+- Публичный адрес: `https://converter.acom-offer-desk.ru`
+- Актуальный источник кода для VPS: upstream `https://github.com/vldsmelov/converter.git`
+- Актуальная ветка live-контура: `test`
+- Автодеплой настроен на стороне VPS через `systemd`:
+  - timer: `converter-autodeploy-test.timer`
+  - service: `converter-autodeploy-test.service`
+  - script: `/usr/local/bin/converter-autodeploy-test.sh`
+- Если нужно именно VPS-операционное описание, см. `deploy/vps/RUNBOOK.md`
+
+### Базовая проверка live-контура
+- Health checks:
+  - `curl -fsS https://converter.acom-offer-desk.ru/nsi/healthz`
+  - `curl -fsS https://converter.acom-offer-desk.ru/docs/healthz`
+  - `curl -fsS https://converter.acom-offer-desk.ru/conversion/healthz`
+- Проверка автодеплоя:
+  - `systemctl status converter-autodeploy-test.timer`
+  - `journalctl -u converter-autodeploy-test.service -n 50 --no-pager`
+
 ## 1. Сервисы и порты
 - `keycloak`: `8080`
 - `nsi`: `8001`
