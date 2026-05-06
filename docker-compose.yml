@@ -1,6 +1,15 @@
 # Локальная разработка: порты на всех интерфейсах — удобно, но не схема для внешнего контура (СБ).
 # Прод / VPS: см. docker-compose.vps.yml и deploy/vps/README.md (форк vvv-web — полигон перед merge в test канона).
 
+x-postgres-tls-command: &postgres_tls_command
+  - postgres
+  - -c
+  - ssl=${CONVERTER_POSTGRES_TLS_ENABLED:-off}
+  - -c
+  - ssl_cert_file=/etc/postgresql/tls/server.crt
+  - -c
+  - ssl_key_file=/etc/postgresql/tls/server.key
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -23,12 +32,14 @@ services:
 
   keycloak_db:
     image: postgres:16-alpine
+    command: *postgres_tls_command
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: keycloak
     volumes:
       - keycloak_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
@@ -41,32 +52,39 @@ services:
       KC_DB_URL_DATABASE: keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: keycloak
+      KC_DB_TLS_MODE: ${KC_DB_TLS_MODE:-disabled}
+      KC_DB_TLS_TRUST_STORE_FILE: ${KC_DB_TLS_TRUST_STORE_FILE:-/etc/postgresql/tls/root.crt}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
     ports:
       - "8080:8080"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import
+      - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
     depends_on:
       - keycloak_db
 
   nsi_db:
     image: postgres:16-alpine
+    command: *postgres_tls_command
     environment:
       POSTGRES_DB: nsi
       POSTGRES_USER: nsi
       POSTGRES_PASSWORD: nsi
     volumes:
       - nsi_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/nsi_db:/etc/postgresql/tls:ro
 
   documents_db:
     image: postgres:16-alpine
+    command: *postgres_tls_command
     environment:
       POSTGRES_DB: documents
       POSTGRES_USER: documents
       POSTGRES_PASSWORD: documents
     volumes:
       - documents_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/documents_db:/etc/postgresql/tls:ro
 
   nsi:
     build: ./services/nsi

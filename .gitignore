@@ -60,6 +60,7 @@ Thumbs.db
 # ---------- Local data dirs (если будете маппить volumes в папки) ----------
 data/
 tmp/
+deploy/vps/postgres-tls/
 
 # --- Frontend (Vite/React/TS) ---
 frontend/node_modules/
