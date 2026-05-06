@@ -13,6 +13,133 @@
 4. Stage 1 включает server-side TLS и `sslmode=require` для Django-сервисов. Это шифрует трафик, но не проверяет имя сервера.
 5. Stage 2 переводит клиенты на проверку CA/имени: `verify-full` для libpq/Django и `verify-server` для Keycloak после согласования lifecycle CA.
 
+## VPS manual apply (short)
+
+Run on the VPS in `/opt/converter`. This touches only Converter DB services: `keycloak_db`, `nsi_db`, `documents_db`.
+Do not print `deploy/vps/.env`; the snippet below edits known keys in place and keeps a timestamped copy.
+
+```bash
+cd /opt/converter
+backup_dir="backups/postgres-tls-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$backup_dir"
+
+for svc in keycloak_db nsi_db documents_db; do
+  echo "===== backup $svc ====="
+  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+    'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+    > "$backup_dir/$svc.dump"
+  sha256sum "$backup_dir/$svc.dump" > "$backup_dir/$svc.dump.sha256"
+done
+
+ls -lh "$backup_dir"
+```
+
+Expected: three non-empty `.dump` files and matching `.sha256` files.
+
+```bash
+cd /opt/converter
+sudo sh deploy/vps/generate-postgres-tls.sh
+sudo chown -R 70:70 deploy/vps/postgres-tls/keycloak_db deploy/vps/postgres-tls/nsi_db deploy/vps/postgres-tls/documents_db
+sudo chmod 0600 deploy/vps/postgres-tls/*/server.key
+sudo chmod 0644 deploy/vps/postgres-tls/*/server.crt deploy/vps/postgres-tls/*/root.crt deploy/vps/postgres-tls/root.crt
+sudo chmod 0600 deploy/vps/postgres-tls/root.key
+find deploy/vps/postgres-tls -maxdepth 2 -type f -printf '%M %u:%g %p\n' | sort
+```
+
+Expected: each DB service has `server.crt`, `server.key`, `root.crt`; `server.key` is `-rw-------`.
+
+```bash
+cd /opt/converter
+sudo python3 - <<'PY'
+from pathlib import Path
+
+env_path = Path("deploy/vps/.env")
+backup_path = env_path.with_name(f".env.before-db-tls-{__import__('time').strftime('%Y%m%d-%H%M%S')}")
+backup_path.write_bytes(env_path.read_bytes())
+
+updates = {
+    "CONVERTER_POSTGRES_TLS_ENABLED": "on",
+    "KC_DB_TLS_MODE": "verify-server",
+    "KC_DB_TLS_TRUST_STORE_FILE": "/etc/postgresql/tls/root.crt",
+}
+
+defaults = {
+    "NSI_DATABASE_URL": "postgres://nsi:nsi@nsi_db/nsi",
+    "DOCUMENTS_DATABASE_URL": "postgres://documents:documents@documents_db/documents",
+}
+
+values = {}
+order = []
+for line in env_path.read_text().splitlines():
+    if line and not line.startswith("#") and "=" in line:
+        key, value = line.split("=", 1)
+        values[key] = value
+        order.append(key)
+
+def require_sslmode(value: str) -> str:
+    if "sslmode=" in value:
+        return value
+    sep = "&" if "?" in value else "?"
+    return f"{value}{sep}sslmode=require"
+
+for key, value in updates.items():
+    if key not in values:
+        order.append(key)
+    values[key] = value
+
+for key, default in defaults.items():
+    if key not in values:
+        order.append(key)
+    values[key] = require_sslmode(values.get(key) or default)
+
+env_path.write_text("\n".join(f"{key}={values[key]}" for key in order) + "\n")
+print(f"updated {env_path}; backup saved as {backup_path}")
+PY
+```
+
+Expected: one line saying the env file was updated and a backup path was created; no secret values are printed.
+
+```bash
+cd /opt/converter
+docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
+docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
+
+for svc in keycloak_db nsi_db documents_db; do
+  echo "===== $svc ====="
+  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+    'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -c "SHOW ssl;"'
+done
+```
+
+Expected: every DB prints `on` for `SHOW ssl;`.
+
+Rollback keeps volumes intact:
+
+```bash
+cd /opt/converter
+sudo cp deploy/vps/.env deploy/vps/.env.before-db-tls-rollback.$(date +%Y%m%d-%H%M%S)
+sudo python3 - <<'PY'
+from pathlib import Path
+
+env_path = Path("deploy/vps/.env")
+drop = {"CONVERTER_POSTGRES_TLS_ENABLED", "KC_DB_TLS_MODE", "KC_DB_TLS_TRUST_STORE_FILE"}
+lines = []
+for line in env_path.read_text().splitlines():
+    if line and not line.startswith("#") and "=" in line:
+        key, value = line.split("=", 1)
+        if key in drop:
+            continue
+        if key in {"NSI_DATABASE_URL", "DOCUMENTS_DATABASE_URL"}:
+            value = value.replace("?sslmode=require", "").replace("&sslmode=require", "")
+        line = f"{key}={value}"
+    lines.append(line)
+env_path.write_text("\n".join(lines) + "\n")
+print(f"updated {env_path} for rollback")
+PY
+docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
+CONVERTER_POSTGRES_TLS_ENABLED=off docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
+```
+
 ## Официальная опора
 
 PostgreSQL 16, server-side TLS: <https://www.postgresql.org/docs/16/ssl-tcp.html>
