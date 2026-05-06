@@ -11,6 +11,19 @@ from pathlib import Path
 EXPECTED_HOST = "converter.acom-offer-desk.ru"
 OPENAPI_SERVICES = ("nsi", "documents")
 PINNED_IMAGE_SERVICES = ("rabbitmq", "minio", "keycloak_db", "keycloak", "nsi_db", "documents_db")
+EXPECTED_SERVICE_NETWORKS = {
+    "rabbitmq": {"converter_backend"},
+    "minio": {"converter_backend"},
+    "keycloak_db": {"converter_db"},
+    "keycloak": {"converter_frontend", "converter_backend", "converter_db"},
+    "nsi_db": {"converter_db"},
+    "documents_db": {"converter_db"},
+    "nsi": {"converter_frontend", "converter_backend", "converter_db"},
+    "documents": {"converter_frontend", "converter_backend", "converter_db"},
+    "documents_worker": {"converter_backend", "converter_db"},
+    "conversion": {"converter_frontend", "converter_backend"},
+    "seed": {"converter_backend"},
+}
 
 
 def fail(message: str) -> None:
@@ -56,6 +69,13 @@ def assert_loopback_ports(name: str, service: dict) -> None:
             fail(f"{name} publishes {published}:{target} on {published_ip or 'all interfaces'}, expected 127.0.0.1")
 
 
+def service_networks(service: dict) -> set[str]:
+    networks = service.get("networks") or {}
+    if isinstance(networks, list):
+        return {str(network) for network in networks}
+    return {str(network) for network in networks}
+
+
 def main() -> None:
     if len(sys.argv) != 3:
         fail("usage: check_vps_compose_security.py <compose-config.json> <deploy/vps/.env.example>")
@@ -78,6 +98,11 @@ def main() -> None:
         if "start-dev" in command_text(service):
             fail(f"{name} still uses Keycloak/dev command pattern")
         assert_loopback_ports(name, service)
+
+    for name, expected_networks in EXPECTED_SERVICE_NETWORKS.items():
+        actual_networks = service_networks(services.get(name, {}))
+        if actual_networks != expected_networks:
+            fail(f"{name} networks must be {sorted(expected_networks)}, got {sorted(actual_networks)}")
 
     keycloak_env = service_environment(services.get("keycloak", {}))
     if keycloak_env.get("KC_HOSTNAME_STRICT") != "true":

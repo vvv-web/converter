@@ -1,57 +1,11 @@
 #!/usr/bin/env bash
-# Пример автодеплоя под ветку test (GitOps).
-# Скопировать на сервер без суффикса .example и выставить chmod 750.
+# DEPRECATED: unattended autodeploy для Converter больше не рекомендован СБ.
 #
-# СБ: скрипт не содержит секретов; реальные переменные — в deploy/vps/.env на VPS.
-# По умолчанию seed пропускается, чтобы деплой не падал из-за уже изменённых prod-ролей/паролей.
+# Причина: старый вариант делал git reset --hard на FETCH_HEAD без ручного подтверждения.
+# Используйте deploy/vps/manual-approved-deploy.sh.example: fetch -> verify commit ->
+# approval marker -> backup -> docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml up -d.
 
 set -euo pipefail
-exec 9>/var/lock/converter-autodeploy-test.lock
-flock -n 9 || {
-  echo "[converter-autodeploy] another deploy is already running"
-  exit 0
-}
 
-REPO_DIR="${REPO_DIR:-/opt/converter}"
-BRANCH="${BRANCH:-test}"
-
-cd "$REPO_DIR"
-
-git fetch origin "$BRANCH"
-current_commit=$(git rev-parse HEAD)
-remote_commit=$(git rev-parse FETCH_HEAD)
-
-echo "[converter-autodeploy] current=${current_commit} remote=${remote_commit}"
-
-if [[ "$current_commit" == "$remote_commit" ]]; then
-  echo "[converter-autodeploy] no changes in origin/${BRANCH}"
-  exit 0
-fi
-
-git checkout "$BRANCH"
-git reset --hard "$remote_commit"
-
-echo "[converter-autodeploy] build frontend"
-docker run --rm -v /opt/converter/frontend:/app -w /app node:20-alpine sh -lc 'npm ci && VITE_KEYCLOAK_URL=https://converter.acom-offer-desk.ru/auth VITE_KEYCLOAK_REALM=uom VITE_KEYCLOAK_CLIENT_ID=frontend VITE_NSI_BASE_URL=https://converter.acom-offer-desk.ru/nsi VITE_DOCS_BASE_URL=https://converter.acom-offer-desk.ru/docs npm run build'
-
-mkdir -p /var/www/converter
-rm -rf /var/www/converter/*
-cp -a /opt/converter/frontend/dist/. /var/www/converter/
-chown -R www-data:www-data /var/www/converter
-
-echo "[converter-autodeploy] deploy backend"
-docker compose -f docker-compose.vps.yml --env-file deploy/vps/.env up -d --build
-
-if [[ "${RUN_SEED:-0}" == "1" ]]; then
-  echo "[converter-autodeploy] run seed"
-  docker compose -f docker-compose.vps.yml --env-file deploy/vps/.env run --rm seed
-else
-  echo "[converter-autodeploy] skip seed (set RUN_SEED=1 to enable)"
-fi
-
-echo "[converter-autodeploy] health checks"
-curl -fsS https://converter.acom-offer-desk.ru/nsi/healthz >/dev/null
-curl -fsS https://converter.acom-offer-desk.ru/docs/healthz >/dev/null
-curl -fsS https://converter.acom-offer-desk.ru/conversion/healthz >/dev/null
-
-echo "[converter-autodeploy] deploy completed successfully"
+echo "[converter-autodeploy] deprecated; use deploy/vps/manual-approved-deploy.sh.example"
+exit 2

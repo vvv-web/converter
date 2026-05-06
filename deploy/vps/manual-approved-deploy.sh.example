@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Ручной approved deploy для Converter VPS.
+# Скрипт не читает секреты в вывод и не делает unattended reset.
+
+set -euo pipefail
+
+exec 9>/var/lock/converter-manual-approved-deploy.lock
+flock -n 9 || {
+  echo "[converter-deploy] another deploy is already running"
+  exit 0
+}
+
+REPO_DIR="${REPO_DIR:-/opt/converter}"
+REMOTE="${REMOTE:-origin}"
+BRANCH="${BRANCH:-test}"
+EXPECTED_COMMIT="${EXPECTED_COMMIT:?set EXPECTED_COMMIT to the approved commit sha}"
+APPROVAL_MARKER="${APPROVAL_MARKER:-${REPO_DIR}/.approved-deploy-${EXPECTED_COMMIT}}"
+BACKUP_ROOT="${BACKUP_ROOT:-/opt/converter-backups}"
+COMPOSE=(docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml)
+
+cd "$REPO_DIR"
+
+echo "[converter-deploy] fetch ${REMOTE}/${BRANCH}"
+git fetch "$REMOTE" "$BRANCH"
+fetched_commit="$(git rev-parse FETCH_HEAD)"
+current_commit="$(git rev-parse HEAD)"
+
+echo "[converter-deploy] current=${current_commit} fetched=${fetched_commit} expected=${EXPECTED_COMMIT}"
+
+if [[ "$fetched_commit" != "$EXPECTED_COMMIT" ]]; then
+  echo "[converter-deploy] fetched commit does not match EXPECTED_COMMIT; abort"
+  exit 1
+fi
+
+if [[ ! -f "$APPROVAL_MARKER" ]]; then
+  echo "[converter-deploy] approval marker is missing: ${APPROVAL_MARKER}"
+  echo "[converter-deploy] after human approval, create it with: touch '${APPROVAL_MARKER}'"
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  echo "[converter-deploy] tracked working tree changes present; abort"
+  git status --short --untracked-files=no
+  exit 1
+fi
+
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_dir="${BACKUP_ROOT}/${timestamp}-${current_commit:0:12}"
+mkdir -p "$backup_dir"
+
+echo "$current_commit" >"${backup_dir}/previous-commit.txt"
+"${COMPOSE[@]}" ps >"${backup_dir}/compose-ps.txt" || true
+
+backup_postgres() {
+  local service="$1"
+  local user="$2"
+  local database="$3"
+  local output="${backup_dir}/${service}.sql"
+
+  if "${COMPOSE[@]}" exec -T "$service" pg_dump -U "$user" "$database" >"$output"; then
+    echo "[converter-deploy] backed up ${service} to ${output}"
+  else
+    echo "[converter-deploy] warning: ${service} backup skipped or failed"
+    rm -f "$output"
+  fi
+}
+
+echo "[converter-deploy] backup Converter databases and MinIO volume"
+backup_postgres keycloak_db keycloak keycloak
+backup_postgres nsi_db nsi nsi
+backup_postgres documents_db documents documents
+
+if docker volume inspect converter_minio_data >/dev/null 2>&1; then
+  docker run --rm \
+    -v converter_minio_data:/data:ro \
+    -v "${backup_dir}:/backup" \
+    busybox tar -czf /backup/minio_data.tgz -C /data .
+fi
+
+echo "[converter-deploy] fast-forward ${BRANCH} to approved commit"
+git checkout "$BRANCH"
+git merge --ff-only "$EXPECTED_COMMIT"
+
+echo "[converter-deploy] build frontend"
+docker run --rm -v /opt/converter/frontend:/app -w /app node:20-alpine sh -lc 'npm ci && VITE_KEYCLOAK_URL=https://converter.acom-offer-desk.ru/auth VITE_KEYCLOAK_REALM=uom VITE_KEYCLOAK_CLIENT_ID=frontend VITE_NSI_BASE_URL=https://converter.acom-offer-desk.ru/nsi VITE_DOCS_BASE_URL=https://converter.acom-offer-desk.ru/docs npm run build'
+
+mkdir -p /var/www/converter
+find /var/www/converter -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+cp -a /opt/converter/frontend/dist/. /var/www/converter/
+chown -R www-data:www-data /var/www/converter
+
+echo "[converter-deploy] deploy backend"
+"${COMPOSE[@]}" up -d --build
+
+if [[ "${RUN_SEED:-0}" == "1" ]]; then
+  echo "[converter-deploy] run seed"
+  "${COMPOSE[@]}" run --rm seed
+else
+  echo "[converter-deploy] skip seed (set RUN_SEED=1 to enable)"
+fi
+
+echo "[converter-deploy] health checks"
+curl -fsS https://converter.acom-offer-desk.ru/nsi/healthz >/dev/null
+curl -fsS https://converter.acom-offer-desk.ru/docs/healthz >/dev/null
+curl -fsS https://converter.acom-offer-desk.ru/conversion/healthz >/dev/null
+
+echo "[converter-deploy] deploy completed successfully; backup=${backup_dir}"

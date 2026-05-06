@@ -27,7 +27,8 @@ git rev-parse fork/test      # vvv-web
 | `.env.example` | Шаблон переменных; реальный `.env` создаётся на сервере и **не коммитится**. |
 | `nginx/converter-upstreams.conf.example` | Пример upstream на `127.0.0.1` для Nginx на хосте. |
 | `keycloak-import/README.md` | Куда класть prod JSON realm без секретов. |
-| `systemd/converter-autodeploy-test.sh.example` | Пример скрипта pull + compose; **systemd/README.md** — unit/timer. |
+| `manual-approved-deploy.sh.example` | Ручной approved deploy: fetch, проверка commit, approval marker, backup, compose up. |
+| `systemd/converter-autodeploy-test.sh.example` | Deprecated guard: старый unattended reset больше не используется. |
 | `../../scripts/security-sbom-scan.sh` | Локальный/CI запуск SBOM и vulnerability scan через Trivy или Syft+Grype. |
 
 Дополнительно: `docs/security-*.md`, `infra/keycloak/README-SB.md`.
@@ -37,15 +38,30 @@ git rev-parse fork/test      # vvv-web
 ```bash
 cp deploy/vps/.env.example deploy/vps/.env
 # отредактировать секреты и домены
-docker compose -f docker-compose.vps.yml up -d --build
+docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml up -d --build
 ```
 
 Однократный seed (профиль `bootstrap`): см. комментарии в `docker-compose.vps.yml`.
 
+## Ручной approved deploy вместо unattended reset
+
+СБ-режим для VPS: оператор явно выбирает commit, проверяет его и создаёт marker подтверждения. Скрипт делает только `git merge --ff-only`; `git reset --hard` в approved deploy не используется.
+
+```bash
+cd /opt/converter
+git fetch origin test
+git log --oneline --decorate -n 5 HEAD..FETCH_HEAD
+APPROVED_COMMIT="$(git rev-parse FETCH_HEAD)"
+touch "/opt/converter/.approved-deploy-${APPROVED_COMMIT}"
+EXPECTED_COMMIT="${APPROVED_COMMIT}" /usr/local/bin/converter-manual-approved-deploy.sh
+```
+
+Рабочий скрипт на сервере берётся из `deploy/vps/manual-approved-deploy.sh.example` и устанавливается без суффикса `.example`, например в `/usr/local/bin/converter-manual-approved-deploy.sh` с правами `750`. Реальные секреты остаются только в `deploy/vps/.env` на VPS.
+
 Перед выкатыванием СБ-изменений без секретов:
 
 ```bash
-docker compose -f docker-compose.vps.yml config --format json >/tmp/converter-vps-compose.json
-python .github/scripts/check_vps_compose_security.py /tmp/converter-vps-compose.json deploy/vps/.env.example
+docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml config --format json >/tmp/converter-vps-compose.json
+python3 .github/scripts/check_vps_compose_security.py /tmp/converter-vps-compose.json deploy/vps/.env.example
 ./scripts/security-sbom-scan.sh
 ```
