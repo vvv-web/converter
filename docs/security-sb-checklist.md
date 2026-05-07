@@ -14,6 +14,7 @@
 - [ ] **Образы:** `latest` убран из prod compose; effective config проверяется в CI; digest resolve/SBOM запускать через `scripts/security-sbom-scan.sh` и `docker compose config --resolve-image-digests` при доступной сети registry.
 - [ ] **Контейнеры:** процесс не root (`USER` в Dockerfile; проверка в CI); MinIO запускается как `65532:65532`, поэтому volume `converter_minio_data` должен быть заранее мигрирован на владельца `65532:65532`.
 - [ ] **БД/SZI:** GitOps-основа для Converter Postgres TLS добавлена: opt-in `CONVERTER_POSTGRES_TLS_ENABLED`, runtime-only cert generator `deploy/vps/generate-postgres-tls.sh`, compose mounts для `keycloak_db`/`nsi_db`/`documents_db`; включать только после backup по `docs/security-db-encryption.md`. Stage 1 = server TLS + `sslmode=require`; Stage 2 = `verify-full`/Keycloak `verify-server`.
+- [ ] **mTLS east-west (полный mesh):** не в scope одного релиза; позиция и план — `docs/security-sb-mtls-scope.md`.
 
 ## Live verification — Keycloak 2FA
 
