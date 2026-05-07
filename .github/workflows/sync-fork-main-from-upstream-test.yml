@@ -2,8 +2,12 @@
 # Зеркалит main форка на test канона (руководитель): reset --hard + push --force-with-lease.
 # На main форка не ведём своих коммитов. Остальные ветки (в т.ч. test форка / СБ) не трогаем.
 #
-# Отключите в настройках форка автоматический «Sync fork», если он мешает,
-# и полагайтесь на этот workflow + ручной workflow_dispatch при необходимости.
+# ВАЖНО (GitHub Actions): событие schedule берёт workflow из ветки по умолчанию репозитория.
+# Если default branch = main (и на main нет этого файла — так и должно быть при зеркале),
+# cron не выполнится. Варианты: сделать default branch форка = test; или убрать schedule
+# и запускать вручную (workflow_dispatch) / через внешний cron + gh workflow run.
+#
+# Отключите в настройках форка автоматический «Sync fork», если он мешает.
 
 name: Sync fork main from upstream test
 
