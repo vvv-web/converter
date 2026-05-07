@@ -1,6 +1,6 @@
 # Только для форка vvv-web/converter.
-# Держит ветку main форка в соответствии с test канона (руководитель),
-# не изменяя остальные ветки (в т.ч. test форка с доработками СБ).
+# Зеркалит main форка на test канона (руководитель): reset --hard + push --force-with-lease.
+# На main форка не ведём своих коммитов. Остальные ветки (в т.ч. test форка / СБ) не трогаем.
 #
 # Отключите в настройках форка автоматический «Sync fork», если он мешает,
 # и полагайтесь на этот workflow + ручной workflow_dispatch при необходимости.
@@ -37,18 +37,12 @@ jobs:
           git remote add upstream https://github.com/vldsmelov/converter.git
           git fetch upstream test
 
-      - name: Fast-forward main к upstream/test (без --force)
+      # main форка = точная копия upstream test (без собственных коммитов на main).
+      - name: Выравнять main по upstream/test (mirror)
         run: |
           set -euo pipefail
           git checkout main
-          if git merge-base --is-ancestor HEAD upstream/test; then
-            git merge --ff-only upstream/test
-          else
-            echo "::error::main форка разошлась с upstream/test — нужен ручной merge или осознанный reset. Остановка."
-            git log --oneline -5 HEAD
-            git log --oneline -5 upstream/test
-            exit 1
-          fi
+          git reset --hard upstream/test
 
-      - name: Push main
-        run: git push origin main
+      - name: Push main (force-with-lease)
+        run: git push origin main --force-with-lease
