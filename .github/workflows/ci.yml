@@ -34,6 +34,8 @@ jobs:
           NSI_DJANGO_SECRET_KEY: dummy
           DOCS_DJANGO_SECRET_KEY: dummy
           S2S_CLIENT_SECRET: dummy
+          RABBITMQ_DEFAULT_USER: converter_ci_mq
+          RABBITMQ_DEFAULT_PASS: dummy_ci_mq_pass
         run: docker compose -f docker-compose.vps.yml config --format json > /tmp/converter-vps-compose.json
       - name: Validate VPS Compose and env example SB invariants
         run: |

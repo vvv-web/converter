@@ -11,9 +11,22 @@
 1. В Admin Console: **Authentication → Flows → Browser** — добавить шаг OTP (или Conditional OTP) согласно [Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/).
 2. Либо назначить пользователям **Required user action** `Configure OTP` (или политику realm для новых пользователей).
 
+Параметры TOTP по умолчанию в **dev-импорте** realm (только справка, не замена шага 1–2): `infra/keycloak/realm-export.json` — поля `otpPolicyType`, `otpPolicyDigits`, `otpPolicyPeriod` и др.; они **не включают** обязательный 2FA для всех пользователей сами по себе.
+
 Импорт JSON **пропускает** уже существующий realm при рестарте — изменения политик безопаснее вносить через Admin API/Console или отдельный controlled import.
 
 VPS-safe шаблон без секретов: `deploy/vps/keycloak-import/realm-prod-template.json.example`. Он не содержит пользователей/паролей и сужает browser-client под prod origin.
+
+## RBAC (роли и разграничение)
+
+Проверка для аудита (выполнять в Admin Console после стабилизации realm):
+
+1. **Realm roles / Client roles:** убедиться, что критичные операции (админка, массовые действия) привязаны к ролям, а не к «всем залогиненным».
+2. **Service accounts:** клиенты `confidential` с service account — перечислить; минимизировать scope ролей по принципу least privilege.
+3. **Пользователи vs сервисные УЗ:** операторские учётки в отдельной группе; S2S-клиенты не используют человеческие пароли из seed.
+4. **Аудит:** включить/проверить событие логина и админских действий согласно политике ИБ (хранение и экспорт логов — на стороне хоста/ELK).
+
+Детали клиентов и redirect: см. разделы ниже в этом файле.
 
 Admin API runbook (выполнять на сервере, значения env не выводить):
 

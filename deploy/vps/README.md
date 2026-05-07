@@ -29,6 +29,8 @@ git rev-parse fork/test      # vvv-web
 | `keycloak-import/README.md` | Куда класть prod JSON realm без секретов. |
 | `manual-approved-deploy.sh.example` | Ручной approved deploy: fetch, проверка commit, approval marker, backup, compose up. |
 | `systemd/converter-autodeploy-test.sh.example` | Deprecated guard: старый unattended reset больше не используется. |
+| `AUTODEPLOY-SB-NOTES.md` | Сопоставление autodeploy vs approved deploy для аудита СБ. |
+| `SECRET-STORAGE-NOTES.md` | Кратко: права на `.env`, ротация, направление к Vault. |
 | `../../scripts/security-sbom-scan.sh` | Локальный/CI запуск SBOM и vulnerability scan через Trivy или Syft+Grype. |
 
 Дополнительно: `docs/security-*.md`, `infra/keycloak/README-SB.md`.

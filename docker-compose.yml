@@ -12,13 +12,16 @@ x-postgres-tls-command: &postgres_tls_command
 
 services:
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3-management@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-converter_mq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-converter_mq_local}
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     user: "65532:65532"
     command: server /data --console-address ":9001"
     environment:
@@ -42,7 +45,7 @@ services:
       - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.5.6@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c
     command: ["start-dev", "--import-realm"]
     environment:
       KC_HOSTNAME: localhost
@@ -123,7 +126,7 @@ services:
       OPENAPI_PUBLIC_ENABLED: "1"
       KEYCLOAK_ISSUER: http://localhost:8080/realms/uom,http://keycloak:8080/realms/uom
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:-converter_mq_local}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: documents-service
@@ -153,7 +156,7 @@ services:
       ALLOWED_HOSTS: "*"
       KEYCLOAK_ISSUER: http://localhost:8080/realms/uom,http://keycloak:8080/realms/uom
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:-converter_mq_local}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: documents-service

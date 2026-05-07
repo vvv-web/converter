@@ -121,6 +121,15 @@ def main() -> None:
     if worker_env.get("ALLOWED_HOSTS") != EXPECTED_HOST:
         fail("documents_worker ALLOWED_HOSTS must render to the public Converter host only")
 
+    for svc_name in ("documents", "documents_worker"):
+        broker = service_environment(services.get(svc_name, {})).get("CELERY_BROKER_URL", "")
+        if "guest:guest" in broker:
+            fail(f"{svc_name} CELERY_BROKER_URL must not use default guest:guest")
+
+    rabbit_env = service_environment(services.get("rabbitmq", {}))
+    if not rabbit_env.get("RABBITMQ_DEFAULT_USER"):
+        fail("rabbitmq must set RABBITMQ_DEFAULT_USER in rendered config")
+
     print("OK: rendered VPS Compose config and env example satisfy SB invariants.")
 
 
