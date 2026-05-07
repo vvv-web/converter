@@ -1,0 +1,54 @@
+# Только для форка vvv-web/converter.
+# Держит ветку main форка в соответствии с test канона (руководитель),
+# не изменяя остальные ветки (в т.ч. test форка с доработками СБ).
+#
+# Отключите в настройках форка автоматический «Sync fork», если он мешает,
+# и полагайтесь на этот workflow + ручной workflow_dispatch при необходимости.
+
+name: Sync fork main from upstream test
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Ежедневно 05:00 UTC; при необходимости измените cron
+    - cron: "0 5 * * *"
+
+concurrency:
+  group: sync-fork-main-upstream-test
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.repository == 'vvv-web/converter'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch upstream (канон) test
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/vldsmelov/converter.git
+          git fetch upstream test
+
+      - name: Fast-forward main к upstream/test (без --force)
+        run: |
+          set -euo pipefail
+          git checkout main
+          if git merge-base --is-ancestor HEAD upstream/test; then
+            git merge --ff-only upstream/test
+          else
+            echo "::error::main форка разошлась с upstream/test — нужен ручной merge или осознанный reset. Остановка."
+            git log --oneline -5 HEAD
+            git log --oneline -5 upstream/test
+            exit 1
+          fi
+
+      - name: Push main
+        run: git push origin main
