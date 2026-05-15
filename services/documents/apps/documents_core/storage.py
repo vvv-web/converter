@@ -20,7 +20,7 @@ def get_minio_client() -> Minio:
     # MinIO python client ждёт endpoint БЕЗ схемы: "minio:9000"
     endpoint = os.environ.get("MINIO_ENDPOINT", "minio:9000")
     secure = os.environ.get("MINIO_SECURE", "0") == "1"
-    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure)
+    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure, cert_check=False)
 
 
 def _looks_like_host_browser(host: str) -> bool:
@@ -45,7 +45,7 @@ def get_minio_presign_client(request_host: str | None = None) -> Minio:
         endpoint = public_endpoint
 
     secure = os.environ.get("MINIO_PUBLIC_SECURE", os.environ.get("MINIO_SECURE", "0")) == "1"
-    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure)
+    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure, cert_check=False)
 
 
 def ensure_bucket(client: Minio, bucket: str) -> None:

@@ -13,7 +13,6 @@ def _split_csv(v: str) -> list[str]:
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = _split_csv(os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1"))
-OPENAPI_PUBLIC_ENABLED = os.environ.get("OPENAPI_PUBLIC_ENABLED", "0") == "1"
 
 
 # Application definition
@@ -36,10 +35,7 @@ INSTALLED_APPS = [
 ]
 
 # Celery
-CELERY_BROKER_URL = os.environ.get(
-    "CELERY_BROKER_URL",
-    "amqp://converter_mq:converter_mq_local@rabbitmq:5672//",
-)
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -133,3 +129,7 @@ SPECTACULAR_SETTINGS = {
         }
     },
 }
+
+import ssl
+if CELERY_BROKER_URL.startswith('amqps'):
+    CELERY_BROKER_USE_SSL = {'cert_reqs': ssl.CERT_NONE}

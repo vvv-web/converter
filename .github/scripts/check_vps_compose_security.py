@@ -9,6 +9,10 @@ from pathlib import Path
 
 
 EXPECTED_HOST = "converter.acom-offer-desk.ru"
+# docker-compose.vps.yml добавляет имена Docker-сервисов для HTTP-проб dephealth/uniproxy (Go net/http шлёт Host из URL).
+EXPECTED_DJANGO_ALLOWED_HOSTS = (
+    "converter.acom-offer-desk.ru,nsi,documents,localhost,127.0.0.1"
+)
 OPENAPI_SERVICES = ("nsi", "documents")
 PINNED_IMAGE_SERVICES = ("rabbitmq", "minio", "keycloak_db", "keycloak", "nsi_db", "documents_db")
 EXPECTED_SERVICE_NETWORKS = {
@@ -112,14 +116,19 @@ def main() -> None:
 
     for name in OPENAPI_SERVICES:
         env = service_environment(services.get(name, {}))
-        if env.get("ALLOWED_HOSTS") != EXPECTED_HOST:
-            fail(f"{name} ALLOWED_HOSTS must render to {EXPECTED_HOST}")
+        if env.get("ALLOWED_HOSTS") != EXPECTED_DJANGO_ALLOWED_HOSTS:
+            fail(
+                f"{name} ALLOWED_HOSTS must render to {EXPECTED_DJANGO_ALLOWED_HOSTS}"
+            )
         if env.get("OPENAPI_PUBLIC_ENABLED") != "0":
             fail(f"{name} must render OPENAPI_PUBLIC_ENABLED=0")
 
     worker_env = service_environment(services.get("documents_worker", {}))
-    if worker_env.get("ALLOWED_HOSTS") != EXPECTED_HOST:
-        fail("documents_worker ALLOWED_HOSTS must render to the public Converter host only")
+    if worker_env.get("ALLOWED_HOSTS") != EXPECTED_DJANGO_ALLOWED_HOSTS:
+        fail(
+            "documents_worker ALLOWED_HOSTS must match Django VPS list "
+            f"({EXPECTED_DJANGO_ALLOWED_HOSTS})"
+        )
 
     for svc_name in ("documents", "documents_worker"):
         broker = service_environment(services.get(svc_name, {})).get("CELERY_BROKER_URL", "")
