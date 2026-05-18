@@ -57,12 +57,11 @@ class MinioTlsConfigTests(SimpleTestCase):
 class InvoiceFileSerializerTests(SimpleTestCase):
     def test_download_url_uses_canonical_trailing_slash(self):
         request = RequestFactory().get("/api/v1/invoices/1/")
-        request.META["HTTP_HOST"] = "documents:8000"
         serializer = InvoiceFileSerializer(context={"request": request})
 
         file_obj = SimpleNamespace(invoice_id=1, id=2)
 
         self.assertEqual(
             serializer.get_download_url(file_obj),
-            "http://documents:8000/api/v1/invoices/1/files/2/download/",
+            "http://testserver/api/v1/invoices/1/files/2/download/",
         )
