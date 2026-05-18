@@ -12,6 +12,11 @@ KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "http://localhost:8080").rstrip("/
 NSI_URL = os.environ.get("NSI_URL", "http://localhost:8001").rstrip("/")
 DOCS_URL = os.environ.get("DOCS_URL", "http://localhost:8002").rstrip("/")
 ORIGIN = os.environ.get("ORIGIN", "http://localhost:5173")
+SEED_SKUS = {
+    "bulk": "BULK-CRUSH-M800-20-40-001",
+    "bolt": "FAST-BOLT-20X60-DIN933-001",
+    "nut": "FAST-NUT-M16-DIN934-001",
+}
 
 
 def wait_until(fn, timeout_s: int = 90, interval_s: float = 1.0, err: str = "timeout"):
@@ -67,6 +72,21 @@ def get_token(username: str, password: str) -> str:
 
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+def select_seed_items(client: httpx.Client, token: str) -> dict[str, dict]:
+    def call():
+        response = client.get(f"{NSI_URL}/api/v1/items/", headers=auth_headers(token))
+        response.raise_for_status()
+        by_sku = {str(x.get("sku")): x for x in response.json()}
+        if not all(sku in by_sku for sku in SEED_SKUS.values()):
+            return None
+        return {
+            alias: by_sku[sku]
+            for alias, sku in SEED_SKUS.items()
+        }
+
+    return wait_until(call, err="seeded NSI items not ready")
 
 
 def ensure_uom(client: httpx.Client, token: str, code: str, name: str, category_id: int, factor: str, precision: int):
@@ -130,13 +150,10 @@ def test_openapi_and_full_flow():
 
     with httpx.Client(timeout=20) as client:
         # --- Use default seeded items (no E2E item creation) ---
-        items = client.get(f"{NSI_URL}/api/v1/items/", headers=auth_headers(token))
-        items.raise_for_status()
-        by_sku = {str(x.get("sku")): x for x in items.json()}
-
-        bulk_item = by_sku["BULK-CRUSH-M800-20-40-001"]
-        fast_bolt_item = by_sku["FAST-BOLT-20X60-DIN933-001"]
-        fast_nut_item = by_sku["FAST-NUT-M16-DIN934-001"]
+        seed_items = select_seed_items(client, token)
+        bulk_item = seed_items["bulk"]
+        fast_bolt_item = seed_items["bolt"]
+        fast_nut_item = seed_items["nut"]
 
         # --- Create invoice in Documents ---
         inv_no = f"INV-E2E-{uuid.uuid4().hex[:6]}"
