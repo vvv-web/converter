@@ -14,6 +14,22 @@ DOCS_URL = os.environ.get("DOCS_URL", "http://localhost:8002").rstrip("/")
 ORIGIN = os.environ.get("ORIGIN", "http://localhost:5173")
 
 
+def wait_until(fn, timeout_s: int = 90, interval_s: float = 1.0, err: str = "timeout"):
+    deadline = time.time() + timeout_s
+    last_exc = None
+    while time.time() < deadline:
+        try:
+            value = fn()
+            if value:
+                return value
+        except Exception as exc:
+            last_exc = exc
+        time.sleep(interval_s)
+    if last_exc:
+        raise RuntimeError(f"{err}: last error: {last_exc}") from last_exc
+    raise RuntimeError(err)
+
+
 def wait_ok(url: str, timeout_s: int = 60) -> None:
     deadline = time.time() + timeout_s
     last = None
@@ -30,19 +46,23 @@ def wait_ok(url: str, timeout_s: int = 60) -> None:
 
 
 def get_token(username: str, password: str) -> str:
-    r = httpx.post(
-        f"{KEYCLOAK_URL}/realms/uom/protocol/openid-connect/token",
-        data={
-            "grant_type": "password",
-            "client_id": "uom-cli",
-            "username": username,
-            "password": password,
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=15,
-    )
-    r.raise_for_status()
-    return r.json()["access_token"]
+    def call():
+        response = httpx.post(
+            f"{KEYCLOAK_URL}/realms/uom/protocol/openid-connect/token",
+            data={
+                "grant_type": "password",
+                "client_id": "uom-cli",
+                "username": username,
+                "password": password,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=15,
+        )
+        if response.status_code != 200:
+            return None
+        return response.json().get("access_token")
+
+    return wait_until(call, err=f"failed to get token for {username}")
 
 
 def auth_headers(token: str) -> dict:
