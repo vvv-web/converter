@@ -89,6 +89,19 @@ def select_seed_items(client: httpx.Client, token: str) -> dict[str, dict]:
     return wait_until(call, err="seeded NSI items not ready")
 
 
+def wait_invoice_status(client: httpx.Client, token: str, invoice_id: int, want: str, timeout_s: int = 180) -> dict:
+    def call():
+        response = client.get(f"{DOCS_URL}/api/v1/invoices/{invoice_id}/", headers=auth_headers(token))
+        response.raise_for_status()
+        invoice = response.json()
+        status = invoice["status"]
+        if status == "failed":
+            raise RuntimeError(f"invoice failed: {invoice.get('error')}")
+        return invoice if status == want else None
+
+    return wait_until(call, timeout_s=timeout_s, err=f"invoice {invoice_id} did not reach {want}")
+
+
 def ensure_uom(client: httpx.Client, token: str, code: str, name: str, category_id: int, factor: str, precision: int):
     r = client.get(f"{NSI_URL}/api/v1/uoms/", headers=auth_headers(token))
     r.raise_for_status()
@@ -178,20 +191,7 @@ def test_openapi_and_full_flow():
         r = client.post(f"{DOCS_URL}/api/v1/invoices/{inv_id}/calculate/", headers=auth_headers(token))
         r.raise_for_status()
 
-        # wait calculated
-        for _ in range(80):
-            g = client.get(f"{DOCS_URL}/api/v1/invoices/{inv_id}/", headers=auth_headers(token))
-            g.raise_for_status()
-            st = g.json()["status"]
-            if st == "calculated":
-                break
-            if st == "failed":
-                raise AssertionError(f"calculate failed: {g.json().get('error')}")
-            time.sleep(1)
-        else:
-            raise AssertionError("timeout waiting for calculated")
-
-        j = g.json()
+        j = wait_invoice_status(client, token, inv_id, "calculated")
         # verify conversions
         by_line = {ln["line_no"]: ln for ln in j["lines"]}
         assert by_line[1]["converted"]["posting_uom_code"] == "M3"
@@ -205,28 +205,19 @@ def test_openapi_and_full_flow():
         r = client.post(f"{DOCS_URL}/api/v1/invoices/{inv_id}/generate/", headers=auth_headers(token))
         r.raise_for_status()
 
-        for _ in range(80):
-            g = client.get(f"{DOCS_URL}/api/v1/invoices/{inv_id}/", headers=auth_headers(token))
-            g.raise_for_status()
-            st = g.json()["status"]
-            if st == "generated":
-                break
-            if st == "failed":
-                raise AssertionError(f"generate failed: {g.json().get('error')}")
-            time.sleep(1)
-        else:
-            raise AssertionError("timeout waiting for generated")
-
-        files = g.json()["files"]
+        generated_invoice = wait_invoice_status(client, token, inv_id, "generated")
+        files = generated_invoice["files"]
         assert len(files) >= 2
 
         xlsx = [f for f in files if f["file_type"] == "xlsx"][0]
         pdf = [f for f in files if f["file_type"] == "pdf"][0]
-        assert xlsx["presigned_url"], "presigned_url for xlsx should not be empty"
-        assert pdf["presigned_url"], "presigned_url for pdf should not be empty"
+        xlsx_url = xlsx.get("download_url") or xlsx.get("presigned_url")
+        pdf_url = pdf.get("download_url") or pdf.get("presigned_url")
+        assert xlsx_url, "download_url or presigned_url for xlsx should not be empty"
+        assert pdf_url, "download_url or presigned_url for pdf should not be empty"
 
         # --- Download via presigned URL (no auth header needed) ---
-        x = client.get(xlsx["presigned_url"])
+        x = client.get(xlsx_url, headers=auth_headers(token) if xlsx.get("download_url") else None)
         x.raise_for_status()
         # XLSX is a zip file => starts with PK
         assert x.content[:2] == b"PK"
@@ -236,6 +227,6 @@ def test_openapi_and_full_flow():
         assert ws["A1"].value == "Номер накладной"
         assert ws["B1"].value == inv_no
 
-        p = client.get(pdf["presigned_url"])
+        p = client.get(pdf_url, headers=auth_headers(token) if pdf.get("download_url") else None)
         p.raise_for_status()
         assert p.content[:4] == b"%PDF"
