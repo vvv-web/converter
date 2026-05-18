@@ -30,7 +30,7 @@ class InvoiceFileSerializer(serializers.ModelSerializer):
 
     def get_download_url(self, obj: InvoiceFile) -> str:
         request = self.context.get("request")
-        path = f"/api/v1/invoices/{obj.invoice_id}/files/{obj.id}/download"
+        path = f"/api/v1/invoices/{obj.invoice_id}/files/{obj.id}/download/"
         return request.build_absolute_uri(path) if request else path
 
     def get_presigned_url(self, obj: InvoiceFile) -> str | None:

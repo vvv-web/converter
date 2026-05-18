@@ -1,10 +1,13 @@
 import ssl
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.conf import settings
+from django.test import RequestFactory
 from django.test import SimpleTestCase
 from django.urls import Resolver404, resolve
 
+from apps.documents_core.serializers import InvoiceFileSerializer
 from apps.documents_core.storage import build_minio_http_client
 from documents_service.settings import build_celery_broker_ssl_config
 
@@ -49,3 +52,17 @@ class MinioTlsConfigTests(SimpleTestCase):
 
     def test_minio_http_client_is_optional_without_custom_ca(self):
         self.assertIsNone(build_minio_http_client(None))
+
+
+class InvoiceFileSerializerTests(SimpleTestCase):
+    def test_download_url_uses_canonical_trailing_slash(self):
+        request = RequestFactory().get("/api/v1/invoices/1/")
+        request.META["HTTP_HOST"] = "documents:8000"
+        serializer = InvoiceFileSerializer(context={"request": request})
+
+        file_obj = SimpleNamespace(invoice_id=1, id=2)
+
+        self.assertEqual(
+            serializer.get_download_url(file_obj),
+            "http://documents:8000/api/v1/invoices/1/files/2/download/",
+        )
