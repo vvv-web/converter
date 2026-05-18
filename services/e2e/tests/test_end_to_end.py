@@ -12,6 +12,9 @@ KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "http://localhost:8080").rstrip("/
 NSI_URL = os.environ.get("NSI_URL", "http://localhost:8001").rstrip("/")
 DOCS_URL = os.environ.get("DOCS_URL", "http://localhost:8002").rstrip("/")
 ORIGIN = os.environ.get("ORIGIN", "http://localhost:5173")
+RABBITMQ_MGMT_URL = os.environ.get("RABBITMQ_MGMT_URL", "http://rabbitmq:15672").rstrip("/")
+RABBITMQ_USER = os.environ.get("RABBITMQ_DEFAULT_USER", "converter_mq")
+RABBITMQ_PASS = os.environ.get("RABBITMQ_DEFAULT_PASS", "converter_mq_local")
 SEED_SKUS = {
     "bulk": "BULK-CRUSH-M800-20-40-001",
     "bolt": "FAST-BOLT-20X60-DIN933-001",
@@ -89,17 +92,40 @@ def select_seed_items(client: httpx.Client, token: str) -> dict[str, dict]:
     return wait_until(call, err="seeded NSI items not ready")
 
 
-def wait_invoice_status(client: httpx.Client, token: str, invoice_id: int, want: str, timeout_s: int = 180) -> dict:
+def wait_celery_worker_ready(client: httpx.Client) -> None:
     def call():
+        response = client.get(
+            f"{RABBITMQ_MGMT_URL}/api/queues/%2F/celery",
+            auth=(RABBITMQ_USER, RABBITMQ_PASS),
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        queue = response.json()
+        return queue if int(queue.get("consumers") or 0) > 0 else None
+
+    wait_until(call, err="celery worker consumer is not ready")
+
+
+def wait_invoice_status(client: httpx.Client, token: str, invoice_id: int, want: str, timeout_s: int = 180) -> dict:
+    last_status = None
+
+    def call():
+        nonlocal last_status
         response = client.get(f"{DOCS_URL}/api/v1/invoices/{invoice_id}/", headers=auth_headers(token))
         response.raise_for_status()
         invoice = response.json()
         status = invoice["status"]
+        last_status = status
         if status == "failed":
             raise RuntimeError(f"invoice failed: {invoice.get('error')}")
         return invoice if status == want else None
 
-    return wait_until(call, timeout_s=timeout_s, err=f"invoice {invoice_id} did not reach {want}")
+    return wait_until(
+        call,
+        timeout_s=timeout_s,
+        err=f"invoice {invoice_id} did not reach {want} (last_status={last_status})",
+    )
 
 
 def ensure_uom(client: httpx.Client, token: str, code: str, name: str, category_id: int, factor: str, precision: int):
@@ -188,6 +214,7 @@ def test_openapi_and_full_flow():
         inv_id = inv.json()["id"]
 
         # --- Calculate ---
+        wait_celery_worker_ready(client)
         r = client.post(f"{DOCS_URL}/api/v1/invoices/{inv_id}/calculate/", headers=auth_headers(token))
         r.raise_for_status()
 
