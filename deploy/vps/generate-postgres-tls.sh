@@ -70,6 +70,10 @@ done
 
 chmod 0600 "$CA_KEY"
 chmod 0644 "$CA_CRT"
+chmod 0755 "$BASE_DIR"
+for svc in keycloak_db nsi_db documents_db; do
+  chmod 0755 "$BASE_DIR/$svc"
+done
 
 if [ "$(id -u)" -eq 0 ]; then
   chown -R "$POSTGRES_UID:$POSTGRES_GID" "$BASE_DIR/keycloak_db" "$BASE_DIR/nsi_db" "$BASE_DIR/documents_db"

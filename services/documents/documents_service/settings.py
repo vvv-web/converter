@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import ssl
 
 import dj_database_url
 
@@ -13,6 +14,7 @@ def _split_csv(v: str) -> list[str]:
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = _split_csv(os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1"))
+OPENAPI_PUBLIC_ENABLED = os.environ.get("OPENAPI_PUBLIC_ENABLED", "0") == "1"
 
 
 # Application definition
@@ -42,6 +44,25 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_RESULT_EXTENDED = True
+
+
+def build_celery_broker_ssl_config(broker_url: str) -> dict[str, object] | None:
+    if not broker_url.startswith("amqps://"):
+        return None
+
+    ssl_config: dict[str, object] = {
+        "cert_reqs": ssl.CERT_REQUIRED,
+    }
+    if ca_certs := os.environ.get("CELERY_BROKER_SSL_CA_CERT"):
+        ssl_config["ca_certs"] = ca_certs
+    if certfile := os.environ.get("CELERY_BROKER_SSL_CERTFILE"):
+        ssl_config["certfile"] = certfile
+    if keyfile := os.environ.get("CELERY_BROKER_SSL_KEYFILE"):
+        ssl_config["keyfile"] = keyfile
+    return ssl_config
+
+
+CELERY_BROKER_USE_SSL = build_celery_broker_ssl_config(CELERY_BROKER_URL)
 
 MIDDLEWARE = [
     # Step 10: must be before CommonMiddleware
@@ -129,7 +150,3 @@ SPECTACULAR_SETTINGS = {
         }
     },
 }
-
-import ssl
-if CELERY_BROKER_URL.startswith('amqps'):
-    CELERY_BROKER_USE_SSL = {'cert_reqs': ssl.CERT_NONE}

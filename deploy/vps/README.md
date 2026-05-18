@@ -1,6 +1,8 @@
 # VPS / СБ — артефакты в форке
 
-**Форк:** `https://github.com/vvv-web/converter` — здесь можно пробовать требования СБ до переноса в канон.
+**Форк:** `https://github.com/vvv-web/converter`
+
+**SB-ветка:** `sb-security-fixes` — источник правды для hardening-контура VPS. Именно эта ветка должна совпадать с live-конфигурацией `converter` на хосте, пока замечания СБ не будут полностью перенесены в канон.
 
 **Канон (upstream):** `https://github.com/vldsmelov/converter`, рабочая ветка выката обычно **`test`**.
 
@@ -15,7 +17,7 @@ git rev-parse origin/test    # vldsmelov
 git rev-parse fork/test      # vvv-web
 ```
 
-Если SHA **совпадают** — ветка `test` форка выровнена с `test` канона. Если нет: `git fetch fork test && git log --oneline fork/test..origin/test` (что отстало) и наоборот.
+Если SHA **совпадают** — ветка `test` форка выровнена с `test` канона. Для security-контура проверяйте отдельно `fork/sb-security-fixes`: именно она должна описывать текущий VPS hardening без drift-а.
 
 Локальный клон может иметь `origin` на vldsmelov или на форк — ориентируйтесь на URL `git remote -v`.
 
@@ -24,7 +26,7 @@ git rev-parse fork/test      # vvv-web
 | Файл | Назначение |
 |------|------------|
 | `../docker-compose.vps.yml` | Прод-стек: loopback-порты, пины версий образов, без dev bind-mount кода. |
-| `.env.example` | Шаблон переменных; реальный `.env` создаётся на сервере и **не коммитится**. |
+| `.env.example` | Шаблон переменных; реальный env-файл живёт на сервере в `/etc/converter/.env` и **не коммитится**. |
 | `nginx/converter-upstreams.conf.example` | Пример upstream на `127.0.0.1` для Nginx на хосте. |
 | `keycloak-import/README.md` | Куда класть prod JSON realm без секретов. |
 | `manual-approved-deploy.sh.example` | Ручной approved deploy: fetch, проверка commit, approval marker, backup, compose up. |
@@ -38,12 +40,36 @@ git rev-parse fork/test      # vvv-web
 ## Быстрый старт на сервере
 
 ```bash
-cp deploy/vps/.env.example deploy/vps/.env
-# отредактировать секреты и домены
-docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml up -d --build
+sudo install -d -m 0750 -o root -g deploy /etc/converter
+sudo cp deploy/vps/.env.example /etc/converter/.env
+sudo chown root:deploy /etc/converter/.env
+sudo chmod 0600 /etc/converter/.env
+# отредактировать секреты, TLS paths и домены
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d --build
 ```
 
 Однократный seed (профиль `bootstrap`): см. комментарии в `docker-compose.vps.yml`.
+
+## SB baseline для security branch
+
+- PostgreSQL TLS включён по умолчанию (`ssl=on`, Django через `sslmode=verify-full`, Keycloak через `verify-server`)
+- RabbitMQ принимает только `amqp/ssl` на `5671`, plaintext `5672` отключён
+- `documents` и `documents_worker` проверяют сертификат RabbitMQ и MinIO по локальной CA
+- Все сервисы публикуют наружу только loopback-порты; внешний контур обслуживает host Nginx
+- Секреты и runtime TLS-ключи не лежат в git
+
+Перед первым SB deploy подготовьте runtime TLS-артефакты:
+
+```bash
+./deploy/vps/generate-postgres-tls.sh
+./deploy/vps/generate-rabbitmq-mtls.sh
+```
+
+`generate-postgres-tls.sh` делает корневой каталог доступным на чтение для non-root приложений, а `generate-rabbitmq-mtls.sh` при запуске от root сразу выставляет корректных владельцев:
+- `999:999` для server key/cert RabbitMQ
+- `65532:65532` для client key/cert, которые читают `documents` и `documents_worker`
+
+Сгенерированные ключи и сертификаты остаются только на сервере или в защищённом операторском контуре, не в git.
 
 ## Ручной approved deploy вместо unattended reset
 
@@ -58,12 +84,12 @@ touch "/opt/converter/.approved-deploy-${APPROVED_COMMIT}"
 EXPECTED_COMMIT="${APPROVED_COMMIT}" /usr/local/bin/converter-manual-approved-deploy.sh
 ```
 
-Рабочий скрипт на сервере берётся из `deploy/vps/manual-approved-deploy.sh.example` и устанавливается без суффикса `.example`, например в `/usr/local/bin/converter-manual-approved-deploy.sh` с правами `750`. Реальные секреты остаются только в `deploy/vps/.env` на VPS.
+Рабочий скрипт на сервере берётся из `deploy/vps/manual-approved-deploy.sh.example` и устанавливается без суффикса `.example`, например в `/usr/local/bin/converter-manual-approved-deploy.sh` с правами `750`. Реальные секреты остаются только в `/etc/converter/.env` на VPS.
 
 Перед выкатыванием СБ-изменений без секретов:
 
 ```bash
-docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml config --format json >/tmp/converter-vps-compose.json
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml config --format json >/tmp/converter-vps-compose.json
 python3 .github/scripts/check_vps_compose_security.py /tmp/converter-vps-compose.json deploy/vps/.env.example
 ./scripts/security-sbom-scan.sh
 ```

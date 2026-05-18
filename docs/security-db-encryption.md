@@ -5,13 +5,13 @@
 
 ## Модель внедрения
 
-В репозитории подготовлена безопасная GitOps-основа, но TLS включается на VPS вручную только после бэкапа volume:
+Security branch `sb-security-fixes` считает PostgreSQL TLS обязательной частью SB-профиля. На VPS TLS всё равно включается только после бэкапа volume и provisioning сертификатов, но итоговое состояние должно совпадать с branch-defaults:
 
 1. `deploy/vps/generate-postgres-tls.sh` генерирует runtime-only CA и server-сертификаты для `keycloak_db`, `nsi_db`, `documents_db`.
 2. `docker-compose.yml` и `docker-compose.vps.yml` монтируют `deploy/vps/postgres-tls/*` read-only и передают PostgreSQL параметры `ssl`, `ssl_cert_file`, `ssl_key_file`.
-3. По умолчанию `CONVERTER_POSTGRES_TLS_ENABLED=off`, поэтому deploy без сертификатов не должен менять поведение БД.
-4. Stage 1 включает server-side TLS и `sslmode=require` для Django-сервисов. Это шифрует трафик, но не проверяет имя сервера.
-5. Stage 2 переводит клиенты на проверку CA/имени: `verify-full` для libpq/Django и `verify-server` для Keycloak после согласования lifecycle CA.
+3. В security branch `CONVERTER_POSTGRES_TLS_ENABLED=on` по умолчанию; на неподготовленном сервере такой deploy должен считаться blocker, а не “деградацией в plaintext”.
+4. Django-сервисы используют `sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt`, то есть проверяют и CA, и имя сервера (`keycloak_db`, `nsi_db`, `documents_db`).
+5. Keycloak использует официальный режим `KC_DB_TLS_MODE=verify-server` и trust store `/etc/postgresql/tls/root.crt`.
 
 ## VPS manual apply (short)
 

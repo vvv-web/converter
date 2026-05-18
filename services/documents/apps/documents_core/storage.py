@@ -1,6 +1,8 @@
 import os
+import ssl
 from dataclasses import dataclass
 
+import urllib3
 from minio import Minio
 
 
@@ -16,11 +18,36 @@ def _secret_key() -> str:
     return os.environ.get("MINIO_SECRET_KEY", os.environ.get("MINIO_ROOT_PASSWORD", "minio12345"))
 
 
+def build_minio_http_client(ca_cert_path: str | None) -> urllib3.PoolManager | None:
+    if not ca_cert_path:
+        return None
+
+    return urllib3.PoolManager(
+        cert_reqs=ssl.CERT_REQUIRED,
+        ca_certs=ca_cert_path,
+    )
+
+
+def create_minio_client(endpoint: str, secure: bool, ca_cert_path: str | None) -> Minio:
+    kwargs = {
+        "access_key": _access_key(),
+        "secret_key": _secret_key(),
+        "secure": secure,
+        "cert_check": secure,
+    }
+    if secure:
+        http_client = build_minio_http_client(ca_cert_path)
+        if http_client is not None:
+            kwargs["http_client"] = http_client
+    return Minio(endpoint, **kwargs)
+
+
 def get_minio_client() -> Minio:
     # MinIO python client ждёт endpoint БЕЗ схемы: "minio:9000"
     endpoint = os.environ.get("MINIO_ENDPOINT", "minio:9000")
     secure = os.environ.get("MINIO_SECURE", "0") == "1"
-    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure, cert_check=False)
+    ca_cert_path = os.environ.get("MINIO_CA_CERT_PATH")
+    return create_minio_client(endpoint, secure=secure, ca_cert_path=ca_cert_path)
 
 
 def _looks_like_host_browser(host: str) -> bool:
@@ -45,7 +72,8 @@ def get_minio_presign_client(request_host: str | None = None) -> Minio:
         endpoint = public_endpoint
 
     secure = os.environ.get("MINIO_PUBLIC_SECURE", os.environ.get("MINIO_SECURE", "0")) == "1"
-    return Minio(endpoint, access_key=_access_key(), secret_key=_secret_key(), secure=secure, cert_check=False)
+    ca_cert_path = os.environ.get("MINIO_CA_CERT_PATH")
+    return create_minio_client(endpoint, secure=secure, ca_cert_path=ca_cert_path)
 
 
 def ensure_bucket(client: Minio, bucket: str) -> None:
