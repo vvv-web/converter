@@ -37,6 +37,11 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   keycloak_db:
     image: postgres:16-alpine
@@ -176,6 +181,8 @@ services:
       MINIO_PUBLIC_SECURE: "0"
     depends_on:
       documents_db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
