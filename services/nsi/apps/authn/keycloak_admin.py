@@ -12,6 +12,13 @@ class KeycloakAdminError(RuntimeError):
     pass
 
 
+def _require_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    raise KeycloakAdminError(f"{name} must be set")
+
+
 @dataclass
 class _TokenState:
     token: str = ""
@@ -25,7 +32,7 @@ class KeycloakAdminClient:
         self.admin_realm = os.environ.get("KEYCLOAK_ADMIN_AUTH_REALM", "master")
         self.client_id = os.environ.get("KEYCLOAK_ADMIN_CLIENT_ID", "admin-cli")
         self.username = os.environ.get("KEYCLOAK_ADMIN_USERNAME", os.environ.get("KEYCLOAK_ADMIN", "admin"))
-        self.password = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+        self.password = _require_env("KEYCLOAK_ADMIN_PASSWORD")
         self.timeout = float(os.environ.get("KEYCLOAK_ADMIN_TIMEOUT", "20"))
         self._token = _TokenState()
 

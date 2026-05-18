@@ -18,7 +18,7 @@ services:
       - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-converter_mq}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-converter_mq_local}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -33,7 +33,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio12345}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -51,7 +51,7 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
     volumes:
       - keycloak_db:/var/lib/postgresql/data
       - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
@@ -66,11 +66,11 @@ services:
       KC_DB_URL_HOST: keycloak_db
       KC_DB_URL_DATABASE: keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
       KC_DB_TLS_MODE: ${KC_DB_TLS_MODE:-disabled}
       KC_DB_TLS_TRUST_STORE_FILE: ${KC_DB_TLS_TRUST_STORE_FILE:-/etc/postgresql/tls/root.crt}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
@@ -85,7 +85,7 @@ services:
     environment:
       POSTGRES_DB: nsi
       POSTGRES_USER: nsi
-      POSTGRES_PASSWORD: nsi
+      POSTGRES_PASSWORD: ${NSI_DB_PASSWORD:?set NSI_DB_PASSWORD}
     volumes:
       - nsi_db:/var/lib/postgresql/data
       - ./deploy/vps/postgres-tls/nsi_db:/etc/postgresql/tls:ro
@@ -96,7 +96,7 @@ services:
     environment:
       POSTGRES_DB: documents
       POSTGRES_USER: documents
-      POSTGRES_PASSWORD: documents
+      POSTGRES_PASSWORD: ${DOCUMENTS_DB_PASSWORD:?set DOCUMENTS_DB_PASSWORD}
     volumes:
       - documents_db:/var/lib/postgresql/data
       - ./deploy/vps/postgres-tls/documents_db:/etc/postgresql/tls:ro
@@ -109,8 +109,8 @@ services:
   nsi:
     build: ./services/nsi
     environment:
-      DJANGO_SECRET_KEY: ${NSI_DJANGO_SECRET_KEY:-dev-secret}
-      DATABASE_URL: postgres://nsi:nsi@nsi_db:5432/nsi
+      DJANGO_SECRET_KEY: ${NSI_DJANGO_SECRET_KEY:?set NSI_DJANGO_SECRET_KEY}
+      DATABASE_URL: ${NSI_DATABASE_URL:?set NSI_DATABASE_URL}
       DJANGO_DEBUG: "1"
       ALLOWED_HOSTS: "*"
       OPENAPI_PUBLIC_ENABLED: "1"
@@ -122,7 +122,7 @@ services:
       KEYCLOAK_ADMIN_AUTH_REALM: master
       KEYCLOAK_ADMIN_CLIENT_ID: admin-cli
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "8001:8000"
     depends_on:
@@ -136,22 +136,24 @@ services:
   documents:
     build: ./services/documents
     environment:
-      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:-dev-secret}
-      DATABASE_URL: postgres://documents:documents@documents_db:5432/documents
+      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
+      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
       DJANGO_DEBUG: "1"
       ALLOWED_HOSTS: "*"
       OPENAPI_PUBLIC_ENABLED: "1"
       KEYCLOAK_ISSUER: http://localhost:8080/realms/uom,http://keycloak:8080/realms/uom
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:-converter_mq_local}@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: documents-service
-      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:-change-me}
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:?set S2S_CLIENT_SECRET}
       CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
       MINIO_PUBLIC_ENDPOINT: localhost:9000
       MINIO_PUBLIC_SECURE: "0"
       MINIO_INTERNAL_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
       - "8002:8000"
     depends_on:
@@ -167,20 +169,22 @@ services:
   documents_worker:
     build: ./services/documents
     environment:
-      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:-dev-secret}
-      DATABASE_URL: postgres://documents:documents@documents_db:5432/documents
+      DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
+      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
       DJANGO_DEBUG: "1"
       ALLOWED_HOSTS: "*"
       KEYCLOAK_ISSUER: http://localhost:8080/realms/uom,http://keycloak:8080/realms/uom
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:-converter_mq_local}@rabbitmq:5672//
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: documents-service
-      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:-change-me}
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:?set S2S_CLIENT_SECRET}
       MINIO_INTERNAL_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: localhost:9000
       MINIO_PUBLIC_SECURE: "0"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     depends_on:
       documents_db:
         condition: service_healthy
@@ -212,8 +216,12 @@ services:
       NSI_URL: http://nsi:8000
       DOCS_URL: http://documents:8000
       SEED_USERNAME: operator
-      SEED_PASSWORD: operator
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD}
       SEED_CLIENT_ID: uom-cli
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      S2S_CLIENT_ID: documents-service
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:?set S2S_CLIENT_SECRET}
     depends_on:
       - keycloak
       - nsi
@@ -229,6 +237,9 @@ services:
       DOCS_URL: http://documents:8000
       DOCUMENTS_URL: http://documents:8000
       ORIGIN: http://localhost:5173
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-converter_mq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD}
     depends_on:
       - keycloak
       - nsi

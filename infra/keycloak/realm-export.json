@@ -52,8 +52,7 @@
       "publicClient": false,
       "serviceAccountsEnabled": true,
       "directAccessGrantsEnabled": false,
-      "standardFlowEnabled": false,
-      "secret": "change-me"
+      "standardFlowEnabled": false
     },
     {
       "clientId": "frontend",
@@ -80,9 +79,6 @@
       "emailVerified": true,
       "firstName": "Operator",
       "lastName": "Operatov",
-      "credentials": [
-        { "type": "password", "value": "operator", "temporary": false }
-      ],
       "realmRoles": [
         "nsi.ping",
         "documents.ping",
@@ -113,9 +109,6 @@
       "emailVerified": true,
       "firstName": "System",
       "lastName": "Administrator",
-      "credentials": [
-        { "type": "password", "value": "administrator", "temporary": false }
-      ],
       "realmRoles": [
         "nsi.ping",
         "documents.ping",

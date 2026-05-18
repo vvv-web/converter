@@ -29,6 +29,9 @@ jobs:
           CONVERTER_PUBLIC_ORIGIN: https://converter.acom-offer-desk.ru
           CONVERTER_KEYCLOAK_ISSUER_PUBLIC: https://converter.acom-offer-desk.ru/auth/realms/uom
           MINIO_ROOT_PASSWORD: dummy
+          KEYCLOAK_DB_PASSWORD: dummy_keycloak_db
+          NSI_DB_PASSWORD: dummy_nsi_db
+          DOCUMENTS_DB_PASSWORD: dummy_documents_db
           KEYCLOAK_ADMIN: admin
           KEYCLOAK_ADMIN_PASSWORD: dummy
           NSI_DJANGO_SECRET_KEY: dummy
@@ -36,6 +39,9 @@ jobs:
           S2S_CLIENT_SECRET: dummy
           RABBITMQ_DEFAULT_USER: converter_ci_mq
           RABBITMQ_DEFAULT_PASS: dummy_ci_mq_pass
+          NSI_DATABASE_URL: postgres://nsi:dummy_nsi_db@nsi_db:5432/nsi?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt
+          DOCUMENTS_DATABASE_URL: postgres://documents:dummy_documents_db@documents_db:5432/documents?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt
+          SEED_PASSWORD: dummy_seed_password
         run: docker compose -f docker-compose.vps.yml config --format json > /tmp/converter-vps-compose.json
       - name: Validate VPS Compose and env example SB invariants
         run: |
@@ -89,6 +95,7 @@ jobs:
           KEYCLOAK_JWKS_URL: http://localhost/jwks
           DJANGO_SECRET_KEY: ci-secret
           DJANGO_DEBUG: "0"
+          CELERY_BROKER_URL: amqp://ci:ci@localhost:5672//
           CONVERSION_BASE_URL: http://localhost:8003
           KEYCLOAK_TOKEN_URL: http://localhost/realms/uom/protocol/openid-connect/token
           S2S_CLIENT_SECRET: ci-secret
@@ -111,6 +118,19 @@ jobs:
       - frontend-quality
       - backend-quality
     timeout-minutes: 30
+    env:
+      RABBITMQ_DEFAULT_PASS: ci_rabbitmq_password
+      MINIO_ROOT_PASSWORD: ci_minio_password
+      KEYCLOAK_DB_PASSWORD: ci_keycloak_db_password
+      NSI_DB_PASSWORD: ci_nsi_db_password
+      DOCUMENTS_DB_PASSWORD: ci_documents_db_password
+      KEYCLOAK_ADMIN_PASSWORD: ci_keycloak_admin_password
+      NSI_DJANGO_SECRET_KEY: ci_nsi_secret
+      DOCS_DJANGO_SECRET_KEY: ci_docs_secret
+      S2S_CLIENT_SECRET: ci_s2s_secret
+      NSI_DATABASE_URL: postgres://nsi:ci_nsi_db_password@nsi_db:5432/nsi
+      DOCUMENTS_DATABASE_URL: postgres://documents:ci_documents_db_password@documents_db:5432/documents
+      SEED_PASSWORD: ci_operator_password
     steps:
       - uses: actions/checkout@v4
       - run: docker compose up -d --build keycloak_db keycloak rabbitmq minio nsi_db documents_db nsi documents documents_worker conversion seed

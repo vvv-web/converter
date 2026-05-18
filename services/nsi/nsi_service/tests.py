@@ -1,6 +1,10 @@
+from unittest.mock import patch
+
 from django.conf import settings
 from django.test import SimpleTestCase
 from django.urls import Resolver404, resolve
+
+from apps.authn.keycloak_admin import KeycloakAdminError, KeycloakAdminClient
 
 
 class OpenApiPublicFlagTests(SimpleTestCase):
@@ -10,3 +14,10 @@ class OpenApiPublicFlagTests(SimpleTestCase):
         for path in ("/api/schema/", "/api/docs/"):
             with self.assertRaises(Resolver404):
                 resolve(path)
+
+
+class KeycloakAdminClientConfigTests(SimpleTestCase):
+    @patch.dict("os.environ", {}, clear=True)
+    def test_admin_password_must_come_from_env(self):
+        with self.assertRaises(KeycloakAdminError):
+            KeycloakAdminClient()

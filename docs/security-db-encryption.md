@@ -64,8 +64,8 @@ updates = {
 }
 
 defaults = {
-    "NSI_DATABASE_URL": "postgres://nsi:nsi@nsi_db/nsi",
-    "DOCUMENTS_DATABASE_URL": "postgres://documents:documents@documents_db/documents",
+    "NSI_DATABASE_URL": "postgres://nsi:CHANGE_ME_NSI_DB_PASSWORD@nsi_db/nsi",
+    "DOCUMENTS_DATABASE_URL": "postgres://documents:CHANGE_ME_DOCUMENTS_DB_PASSWORD@documents_db/documents",
 }
 
 values = {}
@@ -211,8 +211,8 @@ Edit `deploy/vps/.env` on the VPS, without pasting secrets into chat:
 
 ```text
 CONVERTER_POSTGRES_TLS_ENABLED=on
-NSI_DATABASE_URL=postgres://nsi:nsi@nsi_db:5432/nsi?sslmode=require
-DOCUMENTS_DATABASE_URL=postgres://documents:documents@documents_db:5432/documents?sslmode=require
+NSI_DATABASE_URL=postgres://nsi:CHANGE_ME_NSI_DB_PASSWORD@nsi_db:5432/nsi?sslmode=require
+DOCUMENTS_DATABASE_URL=postgres://documents:CHANGE_ME_DOCUMENTS_DB_PASSWORD@documents_db:5432/documents?sslmode=require
 KC_DB_TLS_MODE=verify-server
 KC_DB_TLS_TRUST_STORE_FILE=/etc/postgresql/tls/root.crt
 ```

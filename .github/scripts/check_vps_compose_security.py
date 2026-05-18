@@ -121,10 +121,15 @@ def main() -> None:
         fail("deploy/vps/.env.example must keep PostgreSQL TLS enabled by default in security branch")
     if env_example.get("KC_DB_TLS_MODE") != "verify-server":
         fail("deploy/vps/.env.example must keep KC_DB_TLS_MODE=verify-server")
+    for key in ("KEYCLOAK_DB_PASSWORD", "NSI_DB_PASSWORD", "DOCUMENTS_DB_PASSWORD", "SEED_PASSWORD"):
+        if not env_example.get(key, "").startswith("CHANGE_ME_"):
+            fail(f"deploy/vps/.env.example must declare placeholder value for {key}")
     for key in ("NSI_DATABASE_URL", "DOCUMENTS_DATABASE_URL"):
         value = env_example.get(key, "")
         if "sslmode=verify-full" not in value or "sslrootcert=/etc/postgresql/tls/root.crt" not in value:
             fail(f"{key} must require verify-full and /etc/postgresql/tls/root.crt in deploy/vps/.env.example")
+        if any(token in value for token in ("nsi:nsi@", "documents:documents@")):
+            fail(f"{key} must not embed legacy hardcoded database passwords in deploy/vps/.env.example")
     if env_example.get("MINIO_CA_CERT_PATH") != "/etc/minio/certs/CAs/public.crt":
         fail("deploy/vps/.env.example must declare MINIO_CA_CERT_PATH for internal TLS verification")
     for key in ("CELERY_BROKER_SSL_CA_CERT", "CELERY_BROKER_SSL_CERTFILE", "CELERY_BROKER_SSL_KEYFILE"):
@@ -153,6 +158,13 @@ def main() -> None:
         fail("keycloak must declare proxy header mode for host Nginx")
     if keycloak_env.get("KC_DB_TLS_MODE") != "verify-server":
         fail("keycloak must use verify-server for PostgreSQL TLS in rendered VPS config")
+    if keycloak_env.get("KC_DB_PASSWORD") in {"", "keycloak"}:
+        fail("keycloak must not use a hardcoded KC_DB_PASSWORD in rendered VPS config")
+
+    for svc_name, legacy_password in (("keycloak_db", "keycloak"), ("nsi_db", "nsi"), ("documents_db", "documents")):
+        env = service_environment(services.get(svc_name, {}))
+        if env.get("POSTGRES_PASSWORD") in {"", legacy_password}:
+            fail(f"{svc_name} must not use legacy hardcoded POSTGRES_PASSWORD={legacy_password}")
 
     for name in OPENAPI_SERVICES:
         env = service_environment(services.get(name, {}))
@@ -209,6 +221,9 @@ def main() -> None:
         fail("rabbitmq must enable peer verification on the TLS listener")
     if rabbit_env.get("RABBITMQ_SSL_OPTIONS__FAIL_IF_NO_PEER_CERT") != "true":
         fail("rabbitmq must require client certificates on the TLS listener")
+    seed_env = service_environment(services.get("seed", {}))
+    if seed_env.get("SEED_PASSWORD") in {"", "operator"}:
+        fail("seed must not use hardcoded operator password in rendered VPS config")
     rabbit_ports = {
         (str(port.get("host_ip") or ""), str(port.get("published")), str(port.get("target")))
         for port in services.get("rabbitmq", {}).get("ports") or []

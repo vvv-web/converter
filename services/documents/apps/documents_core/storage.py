@@ -15,7 +15,10 @@ def _access_key() -> str:
 
 
 def _secret_key() -> str:
-    return os.environ.get("MINIO_SECRET_KEY", os.environ.get("MINIO_ROOT_PASSWORD", "minio12345"))
+    value = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("MINIO_ROOT_PASSWORD")
+    if value:
+        return value
+    raise RuntimeError("MINIO_SECRET_KEY or MINIO_ROOT_PASSWORD must be set")
 
 
 def build_minio_http_client(ca_cert_path: str | None) -> urllib3.PoolManager | None:

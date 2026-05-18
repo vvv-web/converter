@@ -91,7 +91,7 @@
 
 ## Admin reset (test mode)
 - Realm role: `system.admin`
-- Default admin user (realm import): `administrator` / `administrator`
+- Admin user is `administrator`; password is provisioned from env during seed/bootstrap and must not be stored in git.
 - Reset endpoints (POST, admin only):
   - NSI: `/api/v1/admin/reset-defaults/`
   - Documents: `/api/v1/admin/reset-defaults/`
@@ -152,6 +152,7 @@ docker compose run --rm documents python manage.py makemigrations --check --dry-
 8. **Безопасное хранение секретов:** Runtime env вынесен из checkout в `/etc/converter/.env` (права `0600`).
 9. **RabbitMQ только по TLS:** plaintext AMQP `5672` отключён; используется только `5671` с peer verification и client certificates для `documents` / `documents_worker`.
 10. **MinIO TLS без `cert_check=False`:** `documents` / `documents_worker` проверяют внутренний сертификат MinIO через локальную CA.
+11. **Без plaintext-credentials в git:** hardcoded пароли/секреты убраны из compose/env examples и realm export; bootstrap-пароли пользователей и `documents-service` client secret задаются только через env и выставляются seed/bootstrap-процедурой.
 
 **Ожидает завершения:**
 * **Настройка сетевого экрана (UFW):** Порты 443 и 22 пока открыты глобально. Мы ожидаем выделения IP-адреса терминального сервера и списка IP корпоративного контура от инфраструктурной команды. Как только данные будут получены, доступ будет строго ограничен этими адресами.

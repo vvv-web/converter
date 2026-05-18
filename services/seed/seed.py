@@ -6,8 +6,15 @@ KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080").rstrip("/")
 NSI_URL = os.getenv("NSI_URL", "http://nsi:8000").rstrip("/")
 DOCS_URL = os.getenv("DOCS_URL", "http://documents:8000").rstrip("/")
 USERNAME = os.getenv("SEED_USERNAME", "operator")
-PASSWORD = os.getenv("SEED_PASSWORD", "operator")
+PASSWORD = os.environ["SEED_PASSWORD"]
 CLIENT_ID = os.getenv("SEED_CLIENT_ID", "uom-cli")
+ADMIN_REALM = os.getenv("KEYCLOAK_ADMIN_AUTH_REALM", "master")
+ADMIN_USERNAME = os.getenv("KEYCLOAK_ADMIN_USERNAME") or os.getenv("KEYCLOAK_ADMIN", "admin")
+ADMIN_PASSWORD = os.environ["KEYCLOAK_ADMIN_PASSWORD"]
+ADMIN_APP_USERNAME = os.getenv("ADMIN_APP_USERNAME", "administrator")
+ADMIN_APP_PASSWORD = os.getenv("ADMIN_APP_PASSWORD") or ADMIN_PASSWORD
+S2S_CLIENT_ID = os.getenv("S2S_CLIENT_ID", "documents-service")
+S2S_CLIENT_SECRET = os.environ["S2S_CLIENT_SECRET"]
 
 
 def wait_http_ok(url: str, timeout_s: int = 240) -> None:
@@ -23,6 +30,78 @@ def wait_http_ok(url: str, timeout_s: int = 240) -> None:
             last = str(e)
         time.sleep(1)
     raise RuntimeError(f"Service not ready: {url}. Last={last}")
+
+
+def admin_auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def admin_url(path: str) -> str:
+    return f"{KEYCLOAK_URL}/admin/realms/uom/{path.lstrip('/')}"
+
+
+def get_admin_token() -> str:
+    r = httpx.post(
+        f"{KEYCLOAK_URL}/realms/{ADMIN_REALM}/protocol/openid-connect/token",
+        data={
+            "grant_type": "password",
+            "client_id": "admin-cli",
+            "username": ADMIN_USERNAME,
+            "password": ADMIN_PASSWORD,
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=20,
+    )
+    r.raise_for_status()
+    return r.json()["access_token"]
+
+
+def ensure_user_password(admin_token: str, username: str, password: str) -> None:
+    r = httpx.get(
+        admin_url("users"),
+        params={"username": username, "exact": "true"},
+        headers=admin_auth(admin_token),
+        timeout=20,
+    )
+    r.raise_for_status()
+    users = r.json()
+    user = next((item for item in users if item.get("username") == username), None)
+    if not user:
+        raise RuntimeError(f"Keycloak realm import must provide user {username!r} before seed runs")
+    httpx.put(
+        admin_url(f"users/{user['id']}/reset-password"),
+        headers=admin_auth(admin_token),
+        json={"type": "password", "value": password, "temporary": False},
+        timeout=20,
+    ).raise_for_status()
+
+
+def ensure_client_secret(admin_token: str, client_id: str, client_secret: str) -> None:
+    r = httpx.get(
+        admin_url("clients"),
+        params={"clientId": client_id},
+        headers=admin_auth(admin_token),
+        timeout=20,
+    )
+    r.raise_for_status()
+    clients = r.json()
+    client = next((item for item in clients if item.get("clientId") == client_id), None)
+    if not client:
+        raise RuntimeError(f"Keycloak realm import must provide client {client_id!r} before seed runs")
+    client_repr = httpx.get(
+        admin_url(f"clients/{client['id']}"),
+        headers=admin_auth(admin_token),
+        timeout=20,
+    )
+    client_repr.raise_for_status()
+    payload = client_repr.json()
+    payload["secret"] = client_secret
+    httpx.put(
+        admin_url(f"clients/{client['id']}"),
+        headers=admin_auth(admin_token),
+        json=payload,
+        timeout=20,
+    ).raise_for_status()
 
 
 def get_token() -> str:
@@ -289,6 +368,11 @@ def main() -> None:
     wait_http_ok(f"{NSI_URL}/healthz")
     wait_http_ok(f"{DOCS_URL}/healthz")
     wait_http_ok(f"{KEYCLOAK_URL}/realms/uom")
+
+    admin_token = get_admin_token()
+    ensure_user_password(admin_token, USERNAME, PASSWORD)
+    ensure_user_password(admin_token, ADMIN_APP_USERNAME, ADMIN_APP_PASSWORD)
+    ensure_client_secret(admin_token, S2S_CLIENT_ID, S2S_CLIENT_SECRET)
 
     token = get_token()
 

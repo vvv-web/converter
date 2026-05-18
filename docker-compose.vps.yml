@@ -50,7 +50,7 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
     volumes:
     - keycloak_db:/var/lib/postgresql/data
     - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
@@ -74,7 +74,7 @@ services:
       KC_DB_URL_HOST: keycloak_db
       KC_DB_URL_DATABASE: keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
       KC_DB_TLS_MODE: ${KC_DB_TLS_MODE:-verify-server}
       KC_DB_TLS_TRUST_STORE_FILE: ${KC_DB_TLS_TRUST_STORE_FILE:-/etc/postgresql/tls/root.crt}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
@@ -100,7 +100,7 @@ services:
     environment:
       POSTGRES_DB: nsi
       POSTGRES_USER: nsi
-      POSTGRES_PASSWORD: nsi
+      POSTGRES_PASSWORD: ${NSI_DB_PASSWORD:?set NSI_DB_PASSWORD}
     volumes:
     - nsi_db:/var/lib/postgresql/data
     - ./deploy/vps/postgres-tls/nsi_db:/etc/postgresql/tls:ro
@@ -113,7 +113,7 @@ services:
     environment:
       POSTGRES_DB: documents
       POSTGRES_USER: documents
-      POSTGRES_PASSWORD: documents
+      POSTGRES_PASSWORD: ${DOCUMENTS_DB_PASSWORD:?set DOCUMENTS_DB_PASSWORD}
     volumes:
     - documents_db:/var/lib/postgresql/data
     - ./deploy/vps/postgres-tls/documents_db:/etc/postgresql/tls:ro
@@ -124,7 +124,7 @@ services:
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${NSI_DJANGO_SECRET_KEY:?set NSI_DJANGO_SECRET_KEY}
-      DATABASE_URL: ${NSI_DATABASE_URL:-postgres://nsi:nsi@nsi_db:5432/nsi?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt}
+      DATABASE_URL: ${NSI_DATABASE_URL:?set NSI_DATABASE_URL}
       DJANGO_DEBUG: '0'
       ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
       OPENAPI_PUBLIC_ENABLED: ${OPENAPI_PUBLIC_ENABLED:-0}
@@ -158,7 +158,7 @@ services:
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
-      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:-postgres://documents:documents@documents_db:5432/documents?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt}
+      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
       DJANGO_DEBUG: '0'
       ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
       OPENAPI_PUBLIC_ENABLED: ${OPENAPI_PUBLIC_ENABLED:-0}
@@ -208,7 +208,7 @@ services:
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
-      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:-postgres://documents:documents@documents_db:5432/documents?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt}
+      DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
       DJANGO_DEBUG: '0'
       ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
       KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}
@@ -269,8 +269,12 @@ services:
       NSI_URL: http://nsi:8000
       DOCS_URL: http://documents:8000
       SEED_USERNAME: ${SEED_USERNAME:-operator}
-      SEED_PASSWORD: ${SEED_PASSWORD:-operator}
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD}
       SEED_CLIENT_ID: ${SEED_CLIENT_ID:-uom-cli}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      S2S_CLIENT_ID: ${S2S_CLIENT_ID:-documents-service}
+      S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:?set S2S_CLIENT_SECRET}
     depends_on:
     - keycloak
     - nsi

@@ -14,7 +14,8 @@ DOCS_URL = os.environ.get("DOCS_URL", "http://localhost:8002").rstrip("/")
 ORIGIN = os.environ.get("ORIGIN", "http://localhost:5173")
 RABBITMQ_MGMT_URL = os.environ.get("RABBITMQ_MGMT_URL", "http://rabbitmq:15672").rstrip("/")
 RABBITMQ_USER = os.environ.get("RABBITMQ_DEFAULT_USER", "converter_mq")
-RABBITMQ_PASS = os.environ.get("RABBITMQ_DEFAULT_PASS", "converter_mq_local")
+RABBITMQ_PASS = os.environ["RABBITMQ_DEFAULT_PASS"]
+SEED_PASSWORD = os.environ["SEED_PASSWORD"]
 SEED_SKUS = {
     "bulk": "BULK-CRUSH-M800-20-40-001",
     "bolt": "FAST-BOLT-20X60-DIN933-001",
@@ -169,10 +170,11 @@ def ensure_item_category(client: httpx.Client, token: str, name: str, default_uo
 
 def test_openapi_and_full_flow():
     # Wait for services
+    wait_ok(f"{KEYCLOAK_URL}/realms/uom")
     wait_ok(f"{NSI_URL}/healthz")
     wait_ok(f"{DOCS_URL}/healthz")
 
-    token = get_token("operator", "operator")
+    token = get_token("operator", SEED_PASSWORD)
 
     # --- CORS + OpenAPI checks (NSI + Documents) ---
     for base in (NSI_URL, DOCS_URL):

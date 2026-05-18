@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "http://keycloak:8080").rstrip("/")
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "uom")
 KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "uom-cli")
+SEED_PASSWORD = os.environ["SEED_PASSWORD"]
 
 NSI_URL = os.environ.get("NSI_URL", "http://nsi:8000").rstrip("/")
 DOCUMENTS_URL = os.environ.get("DOCUMENTS_URL", "http://documents:8000").rstrip("/")
@@ -133,8 +134,8 @@ def test_invoice_calculate_and_generate_e2e():
     _wait_until(lambda: requests.get(f"{NSI_URL}/healthz", timeout=5).status_code == 200, err="NSI not ready")
     _wait_until(lambda: requests.get(f"{DOCUMENTS_URL}/healthz", timeout=5).status_code == 200, err="Documents not ready")
 
-    operator_token = _token("operator", "operator")
-    # Realm export in this repo contains "operator" and service account users.
+    operator_token = _token("operator", SEED_PASSWORD)
+    # Seed resets the operator password from env and keeps service-account roles in Keycloak.
     # Use operator for end-to-end document flow.
     clerk_token = operator_token
 
@@ -232,7 +233,7 @@ def test_invoice_supplier_variants_and_target_uom_e2e():
     _wait_until(lambda: requests.get(f"{NSI_URL}/healthz", timeout=5).status_code == 200, err="NSI not ready")
     _wait_until(lambda: requests.get(f"{DOCUMENTS_URL}/healthz", timeout=5).status_code == 200, err="Documents not ready")
 
-    token = _token("operator", "operator")
+    token = _token("operator", SEED_PASSWORD)
 
     # 1) Load one seeded bulk item.
     items = _get_json(f"{NSI_URL}/api/v1/items/", token)

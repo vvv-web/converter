@@ -8,10 +8,18 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    raise RuntimeError(f"{name} must be set")
+
+
 def _split_csv(v: str) -> list[str]:
     return [x.strip() for x in v.split(",") if x.strip()]
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret")
+SECRET_KEY = _require_env("DJANGO_SECRET_KEY")
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 ALLOWED_HOSTS = _split_csv(os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1"))
 OPENAPI_PUBLIC_ENABLED = os.environ.get("OPENAPI_PUBLIC_ENABLED", "0") == "1"
@@ -37,7 +45,7 @@ INSTALLED_APPS = [
 ]
 
 # Celery
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
+CELERY_BROKER_URL = _require_env("CELERY_BROKER_URL")
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"

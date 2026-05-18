@@ -8,7 +8,7 @@ from django.test import SimpleTestCase
 from django.urls import Resolver404, resolve
 
 from apps.documents_core.serializers import InvoiceFileSerializer
-from apps.documents_core.storage import build_minio_http_client
+from apps.documents_core.storage import _secret_key, build_minio_http_client
 from documents_service.settings import build_celery_broker_ssl_config
 
 
@@ -52,6 +52,11 @@ class MinioTlsConfigTests(SimpleTestCase):
 
     def test_minio_http_client_is_optional_without_custom_ca(self):
         self.assertIsNone(build_minio_http_client(None))
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_minio_secret_requires_env_value(self):
+        with self.assertRaises(RuntimeError):
+            _secret_key()
 
 
 class InvoiceFileSerializerTests(SimpleTestCase):
