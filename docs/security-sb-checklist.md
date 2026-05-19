@@ -2,7 +2,7 @@
 
 **Канон формулировок требований (все проекты):** приватный репозиторий **[vvv-web/security-board-requirements](https://github.com/vvv-web/security-board-requirements)** — `docs/REQUIREMENTS.md`, `docs/CHECKLIST.md`. Этот файл — **только статус выполнения** для Converter и ссылки на `docs/security-*.md`, `deploy/vps/*`.
 
-**Ревизия:** 2026-05-18 — security branch `sb-security-fixes` выровнена с целевым VPS SB-profile: plaintext AMQP отключён, внутренний TLS проверяется клиентами, PostgreSQL TLS включён по умолчанию.
+**Ревизия:** 2026-05-19 — добавлена фиксация по загрузке файлов (N/A) и MinIO; 2026-05-18 — security branch `sb-security-fixes` выровнена с целевым VPS SB-profile: plaintext AMQP отключён, внутренний TLS проверяется клиентами, PostgreSQL TLS включён по умолчанию.
 
 Краткий трекер; детали — в `docs/security-*.md`, `deploy/vps/*`, `infra/keycloak/README-SB.md`.
 
@@ -16,7 +16,8 @@
 - [x] **RabbitMQ без guest/guest:** `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` в compose и **`deploy/vps/.env.example`**; `CELERY_BROKER_URL` в **documents** / **documents_worker** через эти переменные. На VPS значения только в **`/etc/converter/.env`** (не в git).
 - [x] **RabbitMQ без plaintext `5672`:** в `docker-compose.vps.yml` публикуется только TLS listener `127.0.0.1:25671 -> 5671`; `listeners.tcp = none` в `deploy/vps/tls/rabbitmq/rabbitmq.conf`.
 - [x] **RabbitMQ TLS verification включена реально:** broker настроен на `verify_peer` + `fail_if_no_peer_cert=true`, а `documents` / `documents_worker` проверяют CA и используют client certificate для `amqps`.
-- [x] **MinIO не от root:** `user: "65532:65532"` в `docker-compose.vps.yml`. Перед переводом существующего **volume** данных на нового владельца — только после **бэкапа** (см. pending ниже).
+- [x] **MinIO не от root (Linux):** `user: "65532:65532"` в `docker-compose.vps.yml`; `MINIO_ROOT_USER` — **имя учётки S3-API**, не UID 0. Проверка: `scripts/security-verify-minio-and-upload-posture.sh`, `docs/security-sb-file-upload-and-minio.md` §5.
+- [x] **Нет пользовательской загрузки файлов:** эндпоинта upload / `multipart` / `<input type="file">` нет; в MinIO только серверные XLSX/PDF после «Сгенерировать». Обоснование: **`docs/security-sb-file-upload-and-minio.md`**.
 - [x] **Сегментация сетей Docker:** `converter_frontend`, `converter_backend`, `converter_db`; **`converter_db` — `internal: true`**.
 - [x] **Образы в `docker-compose.vps.yml` (VPS):** внешние образы с **тегом + `@sha256:`** (RabbitMQ, MinIO, Keycloak, Postgres в `docker-compose.vps.yml`). Dev `docker-compose.yml`: критичные сервисы выровнены по digests с VPS; **Postgres** в dev может оставаться `postgres:16-alpine` без digest (локальная разработка).
 - [x] **OpenAPI / Swagger в прод-схеме:** `OPENAPI_PUBLIC_ENABLED=0` по умолчанию в сервисах; анонимные бизнес-эндпоинты — отдельная проверка по `docs/security-api-hardening.md`.

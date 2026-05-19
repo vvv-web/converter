@@ -6,6 +6,8 @@
 - [ ] Вывод `docker save` или список образов + скрипт воспроизведения билда (без секретов).
 - [ ] Результаты сканирования / SBOM — по регламенту ИБ (инструмент и версия указать в сопроводительном письме).
 - [ ] Актуальный `docs/security-sb-checklist.md` с отмеченными пунктами.
+- [ ] `docs/security-sb-file-upload-and-minio.md` (позиция по upload N/A и MinIO для СЗ).
+- [ ] Вывод `./scripts/security-verify-minio-and-upload-posture.sh` (на VPS, без секретов).
 - [ ] `docs/security-asset-register.md` (заполненный шаблон без секретов).
 - [ ] Инструкция развёртывания: `deploy/vps/README.md` + `docs/RUNBOOK.md` §10.
 
