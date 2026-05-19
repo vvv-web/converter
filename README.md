@@ -1,6 +1,9 @@
 # Converter
 
 [![CI](https://github.com/vldsmelov/converter/actions/workflows/ci.yml/badge.svg)](https://github.com/vldsmelov/converter/actions/workflows/ci.yml)
+
+**Назначение:** Converter — **калькулятор накладных** (конвертация единиц измерения по правилам НСИ). Пользователь **не загружает файлы**: нет API upload, нет поля `file` во фронтенде. В **MinIO** только Excel/PDF, **собранные сервером** после «Сгенерировать». Подсунуть чужой файл через веб **нельзя**. На production MinIO работает от UID **65532**, не от root ОС; **`MINIO_ROOT_USER`** — логин S3 в MinIO, **не** суперпользователь Linux. Обоснование и команды проверки: [docs/security-sb-file-upload-and-minio.md](docs/security-sb-file-upload-and-minio.md), скрипт `scripts/security-verify-minio-and-upload-posture.sh` на VPS. MinIO при необходимости можно убрать отдельным релизом — на **расчёт не влияет**.
+
 Микросервисный прототип для:
 - ведения НСИ (ЕИ, категории, номенклатура, упаковки, правила конвертации),
 - расчета накладных,
@@ -15,7 +18,7 @@
 - `documents` (`8002`) - накладные, расчет, генерация файлов.
 - `documents_worker` - Celery worker для фоновых задач.
 - `rabbitmq` (`5672`, `15672`) - брокер задач Celery.
-- `minio` (`9000`, `9001`) - объектное хранилище файлов.
+- `minio` (`9000`, `9001`) — хранилище **сгенерированных** XLSX/PDF (не приём файлов от пользователя).
 
 ## Быстрый старт
 1. Подготовить переменные:
@@ -88,6 +91,8 @@
 ## Документация
 - Операционный runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - Frontend заметки: [frontend/README.md](frontend/README.md)
+- СБ: загрузка файлов и MinIO — [docs/security-sb-file-upload-and-minio.md](docs/security-sb-file-upload-and-minio.md)
+- СБ: чеклист — [docs/security-sb-checklist.md](docs/security-sb-checklist.md)
 
 ## Admin reset (test mode)
 - Realm role: `system.admin`
@@ -144,7 +149,7 @@ docker compose run --rm documents python manage.py makemigrations --check --dry-
 
 1. **Изоляция сервисов:** Сервисы (RabbitMQ, MinIO, Keycloak) убраны с публичных интерфейсов и теперь слушают только `127.0.0.1`. Наружу смотрит только Nginx.
 2. **Режим Keycloak:** Keycloak переведен из dev-режима в production (`start` вместо `start-dev`).
-3. **Запуск без root:** Все основные приложения в контейнерах (nsi, documents, conversion, celery-воркеры) теперь запускаются от непривилегированного пользователя (UID 65532).
+3. **Запуск без root:** На VPS (`docker-compose.vps.yml`) приложения и **MinIO** — `user: "65532:65532"`. Переменная **`MINIO_ROOT_USER`** — имя учётки S3-API, не Linux root.
 4. **Разделение сетей:** Контейнеры разнесены по изолированным сетям (`converter_frontend`, `converter_backend`, `converter_db`).
 5. **Фиксация версий:** Использование `latest` тегов заменено на конкретные версии с привязкой к `sha256` хэшам образов.
 6. **Отключение автодеплоя:** Автоматический деплой из GitHub на VPS отключен.
@@ -153,6 +158,7 @@ docker compose run --rm documents python manage.py makemigrations --check --dry-
 9. **RabbitMQ только по TLS:** plaintext AMQP `5672` отключён; используется только `5671` с peer verification и client certificates для `documents` / `documents_worker`.
 10. **MinIO TLS без `cert_check=False`:** `documents` / `documents_worker` проверяют внутренний сертификат MinIO через локальную CA.
 11. **Без plaintext-credentials в git:** hardcoded пароли/секреты убраны из compose/env examples и realm export; bootstrap-пароли пользователей и `documents-service` client secret задаются только через env и выставляются seed/bootstrap-процедурой.
+12. **Нет пользовательской загрузки файлов:** эндпоинта upload / `multipart` / `<input type="file">` нет; в MinIO только серверные XLSX/PDF. Документ для СЗ: [docs/security-sb-file-upload-and-minio.md](docs/security-sb-file-upload-and-minio.md).
 
 **Ожидает завершения:**
 * **Настройка сетевого экрана (UFW):** Порты 443 и 22 пока открыты глобально. Мы ожидаем выделения IP-адреса терминального сервера и списка IP корпоративного контура от инфраструктурной команды. Как только данные будут получены, доступ будет строго ограничен этими адресами.
