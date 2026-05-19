@@ -1,5 +1,7 @@
 # Чеклист СБ (Converter) — форк
 
+**Канон формулировок требований (все проекты):** приватный репозиторий **[vvv-web/security-board-requirements](https://github.com/vvv-web/security-board-requirements)** — `docs/REQUIREMENTS.md`, `docs/CHECKLIST.md`. Этот файл — **только статус выполнения** для Converter и ссылки на `docs/security-*.md`, `deploy/vps/*`.
+
 **Ревизия:** 2026-05-18 — security branch `sb-security-fixes` выровнена с целевым VPS SB-profile: plaintext AMQP отключён, внутренний TLS проверяется клиентами, PostgreSQL TLS включён по умолчанию.
 
 Краткий трекер; детали — в `docs/security-*.md`, `deploy/vps/*`, `infra/keycloak/README-SB.md`.
