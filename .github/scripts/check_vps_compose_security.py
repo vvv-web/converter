@@ -124,6 +124,12 @@ def main() -> None:
     for key in ("KEYCLOAK_DB_PASSWORD", "NSI_DB_PASSWORD", "DOCUMENTS_DB_PASSWORD", "SEED_PASSWORD"):
         if not env_example.get(key, "").startswith("CHANGE_ME_"):
             fail(f"deploy/vps/.env.example must declare placeholder value for {key}")
+    if env_example.get("MINIO_ROOT_USER") in {"", "minio", "minioadmin", "root"}:
+        fail("deploy/vps/.env.example must not use default MinIO S3 login (minio/minioadmin/root)")
+    if not env_example.get("MINIO_ROOT_USER", "").startswith("CHANGE_ME_"):
+        fail("deploy/vps/.env.example must declare placeholder value for MINIO_ROOT_USER")
+    if not env_example.get("MINIO_ROOT_PASSWORD", "").startswith("CHANGE_ME_"):
+        fail("deploy/vps/.env.example must declare placeholder value for MINIO_ROOT_PASSWORD")
     for key in ("NSI_DATABASE_URL", "DOCUMENTS_DATABASE_URL"):
         value = env_example.get(key, "")
         if "sslmode=verify-full" not in value or "sslrootcert=/etc/postgresql/tls/root.crt" not in value:
@@ -213,6 +219,13 @@ def main() -> None:
         ):
             if not has_read_only_mount(volumes, expected_source, expected_target):
                 fail(f"{svc_name} must mount {expected_source}:{expected_target}:ro")
+
+    minio_env = service_environment(services.get("minio", {}))
+    if minio_env.get("MINIO_ROOT_USER") in {"", "minio", "minioadmin", "root"}:
+        fail("minio must not use default MINIO_ROOT_USER in rendered VPS config")
+    weak_minio_passwords = {"", "minio", "minioadmin", "minio123", "password", "changeme"}
+    if minio_env.get("MINIO_ROOT_PASSWORD") in weak_minio_passwords:
+        fail("minio must not use a weak or default MINIO_ROOT_PASSWORD in rendered VPS config")
 
     rabbit_env = service_environment(services.get("rabbitmq", {}))
     if not rabbit_env.get("RABBITMQ_DEFAULT_USER"):

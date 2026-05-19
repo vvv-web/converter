@@ -1,12 +1,16 @@
+# Офлайн-носитель СБ: только образы из docker load, без каталога services/ на хосте.
+
 name: converter
-x-postgres-tls-command: &id001
-- postgres
-- -c
-- ssl=${CONVERTER_POSTGRES_TLS_ENABLED:-on}
-- -c
-- ssl_cert_file=/etc/postgresql/tls/server.crt
-- -c
-- ssl_key_file=/etc/postgresql/tls/server.key
+
+x-postgres-tls-command: &postgres_tls_command
+  - postgres
+  - -c
+  - ssl=${CONVERTER_POSTGRES_TLS_ENABLED:-off}
+  - -c
+  - ssl_cert_file=/etc/postgresql/tls/server.crt
+  - -c
+  - ssl_key_file=/etc/postgresql/tls/server.key
+
 services:
   rabbitmq:
     image: rabbitmq:3-management@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
@@ -14,119 +18,115 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-converter_mq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}
-      RABBITMQ_SSL_OPTIONS__CACERTFILE: /etc/rabbitmq/tls/ca_certificate.pem
-      RABBITMQ_SSL_OPTIONS__CERTFILE: /etc/rabbitmq/tls/server_certificate.pem
-      RABBITMQ_SSL_OPTIONS__KEYFILE: /etc/rabbitmq/tls/server_key.pem
-      RABBITMQ_SSL_OPTIONS__VERIFY: verify_peer
-      RABBITMQ_SSL_OPTIONS__FAIL_IF_NO_PEER_CERT: 'true'
     networks:
-    - converter_backend
+      - converter_backend
     ports:
-    - 127.0.0.1:25673:15672
-    - 127.0.0.1:25671:5671
-    volumes:
-    - ./deploy/vps/tls/rabbitmq:/etc/rabbitmq/tls:ro
-    - ./deploy/vps/tls/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - "127.0.0.1:25672:5672"
+      - "127.0.0.1:25673:15672"
+
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    user: 65532:65532
-    command: server /data --console-address ":9001" --certs-dir /etc/minio/certs
+    user: "65532:65532"
+    command: server /data --console-address ":9001"
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
-    - 127.0.0.1:29000:9000
-    - 127.0.0.1:29001:9001
+      - "127.0.0.1:29000:9000"
+      - "127.0.0.1:29001:9001"
     volumes:
-    - minio_data:/data
-    - ./deploy/vps/tls/minio:/etc/minio/certs:ro
+      - minio_data:/data
     networks:
-    - converter_backend
+      - converter_backend
+
   keycloak_db:
     image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
-    command: *id001
+    command: *postgres_tls_command
     restart: unless-stopped
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
     volumes:
-    - keycloak_db:/var/lib/postgresql/data
-    - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
+      - keycloak_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/keycloak_db:/etc/postgresql/tls:ro
     networks:
-    - converter_db
+      - converter_db
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.6@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c
     restart: unless-stopped
-    command:
-    - start
-    - --import-realm
-    - --http-relative-path=/auth
+    command: ["start", "--import-realm", "--http-relative-path=/auth"]
     environment:
-      KC_HOSTNAME: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
-      KC_HOSTNAME_ADMIN: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
-      KC_HOSTNAME_STRICT: 'true'
+      # СБ-носитель: публичный URL Keycloak на стенде (http + strict=false) для воспроизводимости на localhost без TLS.
+      # Прод за Nginx: задать CONVERTER_KEYCLOAK_HOST_URL=https://<FQDN>/auth и KC_HOSTNAME_STRICT=true в отдельном env.
+      KC_HOSTNAME: ${CONVERTER_KEYCLOAK_HOST_URL:-http://127.0.0.1:18080/auth}
+      KC_HOSTNAME_ADMIN: ${CONVERTER_KEYCLOAK_HOST_URL:-http://127.0.0.1:18080/auth}
+      KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT:-false}
       KC_HTTP_RELATIVE_PATH: /auth
       KC_PROXY_HEADERS: xforwarded
-      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_ENABLED: "true"
       KC_DB: postgres
       KC_DB_URL_HOST: keycloak_db
       KC_DB_URL_DATABASE: keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
-      KC_DB_TLS_MODE: ${KC_DB_TLS_MODE:-verify-server}
+      KC_DB_TLS_MODE: ${KC_DB_TLS_MODE:-disabled}
       KC_DB_TLS_TRUST_STORE_FILE: ${KC_DB_TLS_TRUST_STORE_FILE:-/etc/postgresql/tls/root.crt}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
-      JAVA_TOOL_OPTIONS: -Xmx512m -Xms256m
+      JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
     ports:
-    - 127.0.0.1:18080:8080
+      - "127.0.0.1:18080:8080"
     volumes:
-    - ./deploy/vps/keycloak-import:/opt/keycloak/data/import:ro
-    - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
+      - ./deploy/vps/keycloak-import:/opt/keycloak/data/import:ro
+      - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
     depends_on:
-    - keycloak_db
+      - keycloak_db
     networks:
-    - converter_frontend
-    - converter_backend
-    - converter_db
+      - converter_frontend
+      - converter_backend
+      - converter_db
+
   nsi_db:
     image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
-    command: *id001
+    command: *postgres_tls_command
     restart: unless-stopped
     environment:
       POSTGRES_DB: nsi
       POSTGRES_USER: nsi
       POSTGRES_PASSWORD: ${NSI_DB_PASSWORD:?set NSI_DB_PASSWORD}
     volumes:
-    - nsi_db:/var/lib/postgresql/data
-    - ./deploy/vps/postgres-tls/nsi_db:/etc/postgresql/tls:ro
+      - nsi_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/nsi_db:/etc/postgresql/tls:ro
     networks:
-    - converter_db
+      - converter_db
+
   documents_db:
     image: postgres:16-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
-    command: *id001
+    command: *postgres_tls_command
     restart: unless-stopped
     environment:
       POSTGRES_DB: documents
       POSTGRES_USER: documents
       POSTGRES_PASSWORD: ${DOCUMENTS_DB_PASSWORD:?set DOCUMENTS_DB_PASSWORD}
     volumes:
-    - documents_db:/var/lib/postgresql/data
-    - ./deploy/vps/postgres-tls/documents_db:/etc/postgresql/tls:ro
+      - documents_db:/var/lib/postgresql/data
+      - ./deploy/vps/postgres-tls/documents_db:/etc/postgresql/tls:ro
     networks:
-    - converter_db
+      - converter_db
+
   nsi:
-    build: ./services/nsi
+    image: converter-nsi:latest
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${NSI_DJANGO_SECRET_KEY:?set NSI_DJANGO_SECRET_KEY}
       DATABASE_URL: ${NSI_DATABASE_URL:?set NSI_DATABASE_URL}
-      DJANGO_DEBUG: '0'
-      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru}
       OPENAPI_PUBLIC_ENABLED: ${OPENAPI_PUBLIC_ENABLED:-0}
       CORS_ALLOWED_ORIGINS: ${CONVERTER_PUBLIC_ORIGIN:-https://converter.acom-offer-desk.ru}
       KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}
@@ -139,35 +139,29 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_JWT_AUDIENCE: ${KEYCLOAK_JWT_AUDIENCE:-}
     ports:
-    - 127.0.0.1:18001:8000
+      - "127.0.0.1:18001:8000"
     depends_on:
-    - nsi_db
-    - keycloak
-    command: sh -c "python manage.py migrate --noinput && python manage.py runserver
-      0.0.0.0:8000"
-    volumes:
-    - ./services/nsi:/app
-    - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
+      - nsi_db
+      - keycloak
+    command: >-
+      sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
     networks:
-    - converter_frontend
-    - converter_backend
-    - converter_db
-    user: 65532:65532
+      - converter_frontend
+      - converter_backend
+      - converter_db
+
   documents:
-    build: ./services/documents
+    image: converter-documents:latest
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
       DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
-      DJANGO_DEBUG: '0'
-      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru}
       OPENAPI_PUBLIC_ENABLED: ${OPENAPI_PUBLIC_ENABLED:-0}
       KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}
       KEYCLOAK_JWKS_URL: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqps://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5671//
-      CELERY_BROKER_SSL_CA_CERT: /etc/rabbitmq/tls/ca_certificate.pem
-      CELERY_BROKER_SSL_CERTFILE: /etc/rabbitmq/tls/client_certificate.pem
-      CELERY_BROKER_SSL_KEYFILE: /etc/rabbitmq/tls/client_key.pem
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: ${S2S_CLIENT_ID:-documents-service}
@@ -175,48 +169,37 @@ services:
       CORS_ALLOWED_ORIGINS: ${CONVERTER_PUBLIC_ORIGIN:-https://converter.acom-offer-desk.ru}
       KEYCLOAK_JWT_AUDIENCE: ${KEYCLOAK_JWT_AUDIENCE:-}
       MINIO_PUBLIC_ENDPOINT: ${CONVERTER_FQDN:-converter.acom-offer-desk.ru}
-      MINIO_PUBLIC_SECURE: '1'
+      MINIO_PUBLIC_SECURE: "${CONVERTER_MINIO_PUBLIC_SECURE:-1}"
       MINIO_INTERNAL_ENDPOINT: minio:9000
       MINIO_ENDPOINT: minio:9000
-      MINIO_SECURE: '1'
-      MINIO_CA_CERT_PATH: /etc/minio/certs/CAs/public.crt
+      MINIO_SECURE: "0"
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
-    - 127.0.0.1:18002:8000
+      - "127.0.0.1:18002:8000"
     depends_on:
-    - documents_db
-    - rabbitmq
-    - keycloak
-    - minio
-    command: sh -c "python manage.py migrate --noinput && python manage.py runserver
-      0.0.0.0:8000"
-    volumes:
-    - ./services/documents:/app
-    - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
-    - ./deploy/vps/tls/rabbitmq/ca_certificate.pem:/etc/rabbitmq/tls/ca_certificate.pem:ro
-    - ./deploy/vps/tls/rabbitmq/client_certificate.pem:/etc/rabbitmq/tls/client_certificate.pem:ro
-    - ./deploy/vps/tls/rabbitmq/client_key.pem:/etc/rabbitmq/tls/client_key.pem:ro
-    - ./deploy/vps/tls/minio/public.crt:/etc/minio/certs/CAs/public.crt:ro
+      - documents_db
+      - rabbitmq
+      - keycloak
+      - minio
+    command: >-
+      sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
     networks:
-    - converter_frontend
-    - converter_backend
-    - converter_db
-    user: 65532:65532
+      - converter_frontend
+      - converter_backend
+      - converter_db
+
   documents_worker:
-    build: ./services/documents
+    image: converter-documents_worker:latest
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${DOCS_DJANGO_SECRET_KEY:?set DOCS_DJANGO_SECRET_KEY}
       DATABASE_URL: ${DOCUMENTS_DATABASE_URL:?set DOCUMENTS_DATABASE_URL}
-      DJANGO_DEBUG: '0'
-      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru},nsi,documents,localhost,127.0.0.1
+      DJANGO_DEBUG: "0"
+      ALLOWED_HOSTS: ${CONVERTER_ALLOWED_HOSTS:-converter.acom-offer-desk.ru}
       KEYCLOAK_ISSUER: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}
       KEYCLOAK_JWKS_URL: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}/protocol/openid-connect/certs
-      CELERY_BROKER_URL: amqps://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5671//
-      CELERY_BROKER_SSL_CA_CERT: /etc/rabbitmq/tls/ca_certificate.pem
-      CELERY_BROKER_SSL_CERTFILE: /etc/rabbitmq/tls/client_certificate.pem
-      CELERY_BROKER_SSL_KEYFILE: /etc/rabbitmq/tls/client_key.pem
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-converter_mq}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672//
       CONVERSION_BASE_URL: http://conversion:8000
       KEYCLOAK_TOKEN_URL: http://keycloak:8080/auth/realms/uom/protocol/openid-connect/token
       S2S_CLIENT_ID: ${S2S_CLIENT_ID:-documents-service}
@@ -224,30 +207,22 @@ services:
       KEYCLOAK_JWT_AUDIENCE: ${KEYCLOAK_JWT_AUDIENCE:-}
       MINIO_INTERNAL_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: ${CONVERTER_FQDN:-converter.acom-offer-desk.ru}
-      MINIO_PUBLIC_SECURE: '1'
+      MINIO_PUBLIC_SECURE: "${CONVERTER_MINIO_PUBLIC_SECURE:-1}"
       MINIO_ENDPOINT: minio:9000
-      MINIO_SECURE: '1'
-      MINIO_CA_CERT_PATH: /etc/minio/certs/CAs/public.crt
+      MINIO_SECURE: "0"
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     depends_on:
-    - documents_db
-    - rabbitmq
-    command: sh -c "python manage.py migrate --noinput && celery -A documents_service
-      worker -l info"
-    volumes:
-    - ./services/documents:/app
-    - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
-    - ./deploy/vps/tls/rabbitmq/ca_certificate.pem:/etc/rabbitmq/tls/ca_certificate.pem:ro
-    - ./deploy/vps/tls/rabbitmq/client_certificate.pem:/etc/rabbitmq/tls/client_certificate.pem:ro
-    - ./deploy/vps/tls/rabbitmq/client_key.pem:/etc/rabbitmq/tls/client_key.pem:ro
-    - ./deploy/vps/tls/minio/public.crt:/etc/minio/certs/CAs/public.crt:ro
+      - documents_db
+      - rabbitmq
+    command: >-
+      sh -c "python manage.py migrate --noinput && celery -A documents_service worker -l info"
     networks:
-    - converter_backend
-    - converter_db
-    user: 65532:65532
+      - converter_backend
+      - converter_db
+
   conversion:
-    build: ./services/conversion
+    image: converter-conversion:latest
     restart: unless-stopped
     environment:
       NSI_BASE_URL: http://nsi:8000
@@ -255,15 +230,15 @@ services:
       KEYCLOAK_JWKS_URL: ${CONVERTER_KEYCLOAK_ISSUER_PUBLIC:-https://converter.acom-offer-desk.ru/auth/realms/uom}/protocol/openid-connect/certs
       KEYCLOAK_JWT_AUDIENCE: ${KEYCLOAK_JWT_AUDIENCE:-}
     ports:
-    - 127.0.0.1:18003:8000
+      - "127.0.0.1:18003:8000"
     depends_on:
-    - nsi
+      - nsi
     networks:
-    - converter_frontend
-    - converter_backend
-    user: 65532:65532
+      - converter_frontend
+      - converter_backend
+
   seed:
-    build: ./services/seed
+    image: converter-seed:latest
     environment:
       KEYCLOAK_URL: http://keycloak:8080/auth
       NSI_URL: http://nsi:8000
@@ -276,17 +251,19 @@ services:
       S2S_CLIENT_ID: ${S2S_CLIENT_ID:-documents-service}
       S2S_CLIENT_SECRET: ${S2S_CLIENT_SECRET:?set S2S_CLIENT_SECRET}
     depends_on:
-    - keycloak
-    - nsi
-    - documents
-    restart: 'no'
+      - keycloak
+      - nsi
+      - documents
+    restart: "no"
     networks:
-    - converter_backend
+      - converter_backend
+
 volumes:
-  keycloak_db: null
-  nsi_db: null
-  documents_db: null
-  minio_data: null
+  keycloak_db:
+  nsi_db:
+  documents_db:
+  minio_data:
+
 networks:
   converter_frontend:
     name: converter_frontend

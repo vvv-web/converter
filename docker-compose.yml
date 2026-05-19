@@ -32,7 +32,7 @@ services:
     user: "${MINIO_UID:-0}:${MINIO_GID:-0}"
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
@@ -152,7 +152,7 @@ services:
       MINIO_PUBLIC_ENDPOINT: localhost:9000
       MINIO_PUBLIC_SECURE: "0"
       MINIO_INTERNAL_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     ports:
       - "8002:8000"
@@ -183,7 +183,7 @@ services:
       MINIO_INTERNAL_ENDPOINT: minio:9000
       MINIO_PUBLIC_ENDPOINT: localhost:9000
       MINIO_PUBLIC_SECURE: "0"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minio}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
     depends_on:
       documents_db:

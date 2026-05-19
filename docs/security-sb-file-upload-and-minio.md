@@ -81,9 +81,10 @@ minio:
 
 ### 5.2. Переменная `MINIO_ROOT_USER`
 
-- Это **логин администратора API MinIO** (аналог access key), задаётся в env.
+- Это **логин администратора API MinIO** (аналог access key), задаётся в env. Имя ключа **фиксировано MinIO** (vendor); переименовать переменную нельзя.
 - **Не** означает запуск контейнера от суперпользователя Linux.
-- Пароль — `MINIO_ROOT_PASSWORD` (только в `/etc/converter/.env` на сервере, не в git).
+- В `docker-compose.vps.yml` **нет** fallback `:-minio` — только `${MINIO_ROOT_USER:?set MINIO_ROOT_USER}`.
+- На VPS: свой логин (например `converter_storage`), **не** `minio` / `root`; пароль — `MINIO_ROOT_PASSWORD` (только в `/etc/converter/.env`, chmod 600, не в git).
 
 ### 5.3. Команды проверки на VPS (без секретов)
 
