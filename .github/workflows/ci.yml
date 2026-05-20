@@ -124,10 +124,12 @@ jobs:
       - backend-quality
     timeout-minutes: 30
     env:
-      CONVERTER_FQDN: keycloak
+      CONVERTER_FQDN: localhost
       CONVERTER_PUBLIC_ORIGIN: http://localhost:5173
       CONVERTER_KEYCLOAK_ISSUER_PUBLIC: http://keycloak:8080/auth/realms/uom
       CONVERTER_ALLOWED_HOSTS: localhost,127.0.0.1,nsi,documents
+      KC_HOSTNAME: http://keycloak:8080/auth
+      KC_HOSTNAME_ADMIN: http://keycloak:8080/auth
       KC_HOSTNAME_STRICT: "false"
       CONVERTER_POSTGRES_TLS_ENABLED: on
       RABBITMQ_DEFAULT_USER: converter_ci_mq
@@ -161,6 +163,20 @@ jobs:
           docker compose -f docker-compose.vps.yml up -d --build \
             keycloak_db keycloak rabbitmq minio nsi_db documents_db \
             nsi documents documents_worker conversion seed
+      - name: Wait for Keycloak (production start is slower than start-dev)
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            if docker compose -f docker-compose.vps.yml exec -T keycloak \
+              sh -c 'wget -q -O- http://127.0.0.1:8080/auth/realms/uom >/dev/null 2>&1'; then
+              echo "Keycloak ready (~$((i * 2))s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.vps.yml ps
+          docker compose -f docker-compose.vps.yml logs keycloak --tail 120
+          exit 1
       - name: Run e2e
         run: docker compose -f docker-compose.vps.yml --profile tools run --rm e2e
       - if: always()
