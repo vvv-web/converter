@@ -5,6 +5,8 @@
 
 **Назначение приложения:** калькулятор накладных (НСИ, расчёт, генерация XLSX/PDF на сервере). Пользователь **не загружает** файлы в систему — см. [docs/security-sb-file-upload-and-minio.md](docs/security-sb-file-upload-and-minio.md).
 
+**Образы Docker на носителе (флешка):** поставка tar-образов и дистрибутивов для ИБ согласована **отдельно от git** (в репозитории нет `Converter-nositel-dlya-SB/` и offline-compose). Источник правды для live VPS и аудита — эта ветка + `docker-compose.vps.yml` + `/etc/converter/.env`.
+
 ---
 
 ## Единственный рабочий стек
