@@ -45,6 +45,7 @@ sudo cp deploy/vps/.env.example /etc/converter/.env
 sudo chown root:deploy /etc/converter/.env
 sudo chmod 0600 /etc/converter/.env
 # отредактировать секреты, TLS paths и домены
+./scripts/compose-preflight-tls.sh   # первый раз: postgres/rabbit/minio TLS
 docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d --build
 ```
 

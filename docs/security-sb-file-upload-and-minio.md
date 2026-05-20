@@ -106,10 +106,9 @@ docker top converter-documents-1
 ./scripts/security-verify-minio-and-upload-posture.sh
 ```
 
-### 5.4. Dev-окружение (`docker-compose.yml`)
+### 5.4. Локально и CI (тот же `docker-compose.vps.yml`)
 
-Локально MinIO по умолчанию может стартовать от UID **0** из-за прав на named volume (`MINIO_UID` / `MINIO_GID`).  
-**На VPS это не используется** — там только `docker-compose.vps.yml` с **65532:65532**.
+В ветке **`sb-security-fixes`** отдельного dev-compose нет: MinIO везде с **`user: 65532:65532`** и `${MINIO_ROOT_USER:?set …}`. Перед первым `up` — `./scripts/compose-preflight-tls.sh`.
 
 ---
 

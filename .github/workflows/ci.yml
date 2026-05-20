@@ -28,6 +28,7 @@ jobs:
           CONVERTER_FQDN: converter.acom-offer-desk.ru
           CONVERTER_PUBLIC_ORIGIN: https://converter.acom-offer-desk.ru
           CONVERTER_KEYCLOAK_ISSUER_PUBLIC: https://converter.acom-offer-desk.ru/auth/realms/uom
+          MINIO_ROOT_USER: ci_minio_storage
           MINIO_ROOT_PASSWORD: dummy
           KEYCLOAK_DB_PASSWORD: dummy_keycloak_db
           NSI_DB_PASSWORD: dummy_nsi_db
@@ -119,21 +120,44 @@ jobs:
       - backend-quality
     timeout-minutes: 30
     env:
+      CONVERTER_FQDN: keycloak
+      CONVERTER_PUBLIC_ORIGIN: http://localhost:5173
+      CONVERTER_KEYCLOAK_ISSUER_PUBLIC: http://keycloak:8080/auth/realms/uom
+      CONVERTER_ALLOWED_HOSTS: localhost,127.0.0.1,nsi,documents
+      KC_HOSTNAME_STRICT: "false"
+      CONVERTER_POSTGRES_TLS_ENABLED: on
+      RABBITMQ_DEFAULT_USER: converter_ci_mq
       RABBITMQ_DEFAULT_PASS: ci_rabbitmq_password
+      MINIO_ROOT_USER: ci_minio_storage
       MINIO_ROOT_PASSWORD: ci_minio_password
       KEYCLOAK_DB_PASSWORD: ci_keycloak_db_password
       NSI_DB_PASSWORD: ci_nsi_db_password
       DOCUMENTS_DB_PASSWORD: ci_documents_db_password
+      KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ci_keycloak_admin_password
       NSI_DJANGO_SECRET_KEY: ci_nsi_secret
       DOCS_DJANGO_SECRET_KEY: ci_docs_secret
       S2S_CLIENT_SECRET: ci_s2s_secret
-      NSI_DATABASE_URL: postgres://nsi:ci_nsi_db_password@nsi_db:5432/nsi
-      DOCUMENTS_DATABASE_URL: postgres://documents:ci_documents_db_password@documents_db:5432/documents
+      NSI_DATABASE_URL: postgres://nsi:ci_nsi_db_password@nsi_db:5432/nsi?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt
+      DOCUMENTS_DATABASE_URL: postgres://documents:ci_documents_db_password@documents_db:5432/documents?sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt
+      KC_DB_TLS_MODE: verify-server
+      KC_DB_TLS_TRUST_STORE_FILE: /etc/postgresql/tls/root.crt
       SEED_PASSWORD: ci_operator_password
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose up -d --build keycloak_db keycloak rabbitmq minio nsi_db documents_db nsi documents documents_worker conversion seed
-      - run: docker compose run --rm e2e
+      - name: Provision compose TLS (CI)
+        run: |
+          set -euo pipefail
+          chmod +x deploy/vps/generate-postgres-tls.sh deploy/vps/generate-rabbitmq-mtls.sh deploy/vps/generate-minio-tls.sh
+          ./deploy/vps/generate-postgres-tls.sh
+          ./deploy/vps/generate-rabbitmq-mtls.sh
+          ./deploy/vps/generate-minio-tls.sh
+      - name: Up SB stack for e2e
+        run: |
+          docker compose -f docker-compose.vps.yml up -d --build \
+            keycloak_db keycloak rabbitmq minio nsi_db documents_db \
+            nsi documents documents_worker conversion seed
+      - name: Run e2e
+        run: docker compose -f docker-compose.vps.yml --profile tools run --rm e2e
       - if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.vps.yml down -v

@@ -11,30 +11,34 @@
 - хранения файлов в MinIO,
 - авторизации и ролей через Keycloak.
 
-## Состав сервисов
-- `keycloak` (`8080`) - аутентификация/авторизация.
-- `nsi` (`8001`) - справочники и правила.
-- `conversion` (`8003`) - расчет конвертации по данным NSI.
-- `documents` (`8002`) - накладные, расчет, генерация файлов.
-- `documents_worker` - Celery worker для фоновых задач.
-- `rabbitmq` (`5672`, `15672`) - брокер задач Celery.
-- `minio` (`9000`, `9001`) — хранилище **сгенерированных** XLSX/PDF (не приём файлов от пользователя).
+## Состав сервисов (ветка `sb-security-fixes`)
 
-## Быстрый старт
-1. Подготовить переменные:
-   - `Copy-Item .env.example .env -Force`
-2. Поднять backend-контур:
-   - `docker compose up --build -d`
-3. Поднять frontend:
-   - `docker compose --profile ui up -d frontend`
-4. Открыть:
-   - UI: `http://localhost:5173`
-   - Keycloak: `http://localhost:8080`
+Единый манифест: **`docker-compose.vps.yml`** (TLS, loopback, non-root). На VPS — тот же файл; локально/CI — через `docker-compose.yml` (`include`).
 
-## Health-check
-- NSI: `http://localhost:8001/healthz`
-- Documents: `http://localhost:8002/healthz`
-- Conversion: `http://localhost:8003/healthz`
+| Сервис | Loopback (локально) | Назначение |
+|--------|---------------------|------------|
+| `keycloak` | `127.0.0.1:18080` | Auth (`/auth`) |
+| `nsi` | `127.0.0.1:18001` | НСИ |
+| `documents` | `127.0.0.1:18002` | Накладные |
+| `conversion` | `127.0.0.1:18003` | Расчёт |
+| `rabbitmq` | `127.0.0.1:25671` (TLS), mgmt `25673` | Celery |
+| `minio` | `127.0.0.1:29000` / `29001` | Сгенерированные XLSX/PDF |
+
+## Быстрый старт (локально, hardened как VPS)
+
+1. `cp .env.example .env` — задать пароли (`MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, БД, …).
+2. `./scripts/compose-preflight-tls.sh` — один раз сгенерировать TLS.
+3. `docker compose --env-file .env up -d --build`
+4. UI: `docker compose --env-file .env --profile ui up -d frontend` → `http://127.0.0.1:15173`
+5. Keycloak Admin: `http://127.0.0.1:18080/auth`
+
+## Health-check (с заголовком Host из `CONVERTER_ALLOWED_HOSTS`)
+
+- NSI: `curl -fsS -H 'Host: localhost' http://127.0.0.1:18001/healthz`
+- Documents: `curl -fsS -H 'Host: localhost' http://127.0.0.1:18002/healthz`
+- Conversion: `http://127.0.0.1:18003/healthz`
+
+**Аудит СБ:** только `docker-compose.vps.yml` + [`docs/SECURITY-SB-AUDIT-SCOPE.md`](docs/SECURITY-SB-AUDIT-SCOPE.md). Отдельного «dev compose» в ветке нет.
 
 ## Текущий функционал
 
@@ -145,7 +149,7 @@ docker compose run --rm documents python manage.py makemigrations --check --dry-
 
 Ветка **`sb-security-fixes`** — **отдельная ветка под СБ** (форк `vvv-web/converter`): источник правды для hardened VPS, пока изменения не перенесены в канон `test`. Live на VPS = эта ветка + `/etc/converter/.env`.
 
-**Для аудита ИБ:** открывать **[`docker-compose.vps.yml`](docker-compose.vps.yml)** и **[`docs/SECURITY-SB-AUDIT-SCOPE.md`](docs/SECURITY-SB-AUDIT-SCOPE.md)** — не [`docker-compose.yml`](docker-compose.yml) (только локальная разработка).
+**Для аудита ИБ:** **[`docker-compose.vps.yml`](docker-compose.vps.yml)** (и [`docs/SECURITY-SB-AUDIT-SCOPE.md`](docs/SECURITY-SB-AUDIT-SCOPE.md)). [`docker-compose.yml`](docker-compose.yml) — тот же манифест через `include`, не отдельный dev-стек.
 
 В рамках приведения проекта в соответствие с требованиями ИБ для VPS-профиля зафиксированы следующие требования:
 

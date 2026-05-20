@@ -66,7 +66,7 @@ services:
     environment:
       KC_HOSTNAME: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
       KC_HOSTNAME_ADMIN: https://${CONVERTER_FQDN:-converter.acom-offer-desk.ru}/auth
-      KC_HOSTNAME_STRICT: 'true'
+      KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT:-true}
       KC_HTTP_RELATIVE_PATH: /auth
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: 'true'
@@ -85,7 +85,7 @@ services:
     ports:
     - 127.0.0.1:18080:8080
     volumes:
-    - ./deploy/vps/keycloak-import:/opt/keycloak/data/import:ro
+    - ./infra/keycloak:/opt/keycloak/data/import:ro
     - ./deploy/vps/postgres-tls:/etc/postgresql/tls:ro
     depends_on:
     - keycloak_db
@@ -282,6 +282,61 @@ services:
     restart: 'no'
     networks:
     - converter_backend
+
+  e2e:
+    build: ./services/e2e
+    profiles:
+    - tools
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      NSI_URL: http://nsi:8000
+      DOCS_URL: http://documents:8000
+      DOCUMENTS_URL: http://documents:8000
+      ORIGIN: http://localhost:5173
+      RABBITMQ_MGMT_URL: http://rabbitmq:15672
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-converter_mq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?set RABBITMQ_DEFAULT_PASS}
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD}
+    depends_on:
+    - keycloak
+    - nsi
+    - documents
+    - conversion
+    command:
+    - pytest
+    - -q
+    - tests/test_end_to_end.py
+    networks:
+    - converter_backend
+    - converter_frontend
+
+  frontend:
+    image: node:20-alpine
+    profiles:
+    - ui
+    working_dir: /repo/frontend
+    volumes:
+    - ./:/repo
+    ports:
+    - 127.0.0.1:15173:5173
+    environment:
+      VITE_KEYCLOAK_URL: http://127.0.0.1:18080/auth
+      VITE_KEYCLOAK_REALM: uom
+      VITE_KEYCLOAK_CLIENT_ID: frontend
+      VITE_DOCS_BASE_URL: http://127.0.0.1:18002
+      VITE_NSI_BASE_URL: http://127.0.0.1:18001
+    depends_on:
+    - keycloak
+    - documents
+    - nsi
+    - seed
+    command:
+    - sh
+    - -c
+    - npm install && npm run dev -- --host 0.0.0.0 --port 5173
+    networks:
+    - converter_frontend
+
 volumes:
   keycloak_db: null
   nsi_db: null

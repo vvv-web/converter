@@ -61,6 +61,10 @@ Thumbs.db
 data/
 tmp/
 deploy/vps/postgres-tls/
+deploy/vps/tls/rabbitmq/*.pem
+deploy/vps/tls/rabbitmq/*.key
+deploy/vps/tls/rabbitmq/ca.srl
+deploy/vps/tls/minio/
 
 # --- Frontend (Vite/React/TS) ---
 frontend/node_modules/

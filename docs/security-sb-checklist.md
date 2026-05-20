@@ -19,7 +19,7 @@
 - [x] **MinIO не от root (Linux):** `user: "65532:65532"` в `docker-compose.vps.yml`; `MINIO_ROOT_USER` — **имя учётки S3-API**, не UID 0. Проверка: `scripts/security-verify-minio-and-upload-posture.sh`, `docs/security-sb-file-upload-and-minio.md` §5.
 - [x] **Нет пользовательской загрузки файлов:** эндпоинта upload / `multipart` / `<input type="file">` нет; в MinIO только серверные XLSX/PDF после «Сгенерировать». Обоснование: **`docs/security-sb-file-upload-and-minio.md`**.
 - [x] **Сегментация сетей Docker:** `converter_frontend`, `converter_backend`, `converter_db`; **`converter_db` — `internal: true`**.
-- [x] **Образы в `docker-compose.vps.yml` (VPS):** внешние образы с **тегом + `@sha256:`** (RabbitMQ, MinIO, Keycloak, Postgres в `docker-compose.vps.yml`). Dev `docker-compose.yml`: критичные сервисы выровнены по digests с VPS; **Postgres** в dev может оставаться `postgres:16-alpine` без digest (локальная разработка).
+- [x] **Образы в `docker-compose.vps.yml`:** внешние образы с **тегом + `@sha256:`** (RabbitMQ, MinIO, Keycloak, Postgres). Локально/CI — тот же файл (`docker-compose.yml` только `include`).
 - [x] **OpenAPI / Swagger в прод-схеме:** `OPENAPI_PUBLIC_ENABLED=0` по умолчанию в сервисах; анонимные бизнес-эндпоинты — отдельная проверка по `docs/security-api-hardening.md`.
 - [x] **PyJWT (замечание СБ):** **`PyJWT[crypto]==2.12.0`** в **nsi / documents / conversion** `requirements.txt`; образы пересобираются с этой версией (носитель: `02_obrazy/*.tar`, `HESH-GIT-KOMITA.txt`).
 - [x] **Выкат на VPS (требование СБ):** автодеплой **не используется**; развёртывание на текущем VPS — **только вручную по согласованной процедуре**; до переноса hardening в канон источником правды для VPS является **`sb-security-fixes`**.
@@ -50,7 +50,7 @@
 
 ## Pending / операционные напоминания
 
-- [x] После каждого значимого **pull** на VPS: `docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml config` и убедиться, что активен **`docker-compose.vps.yml`**, не dev `docker-compose.yml`.
+- [x] После каждого значимого **pull** на VPS: `docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml config` (отдельного dev-compose в ветке нет).
 - [x] Убедиться, что в **`/etc/converter/.env`** заданы **RABBITMQ_***, broker/client TLS paths и прочие обязательные переменные (иначе `config` / `up` падают); секреты не светить в логах.
 - [ ] Перед первым **non-root MinIO** на уже существующем **volume** данных — **бэкап** и смена владельца каталога данных на **65532:65532** (см. заметки в `AGENTS.md` / эксплуатацию).
 - [ ] При live-деплое не затрагивать внешний **order_database** / чужой **5432**; **Converter** использует свои тома Postgres и перечисленные loopback-порты.

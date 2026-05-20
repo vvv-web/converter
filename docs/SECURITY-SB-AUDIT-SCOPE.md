@@ -17,12 +17,15 @@
 
 **Живой хост:** checkout `/opt/converter` на ветке `sb-security-fixes`, секреты только в **`/etc/converter/.env`** (chmod `600`, не в git).
 
-## Не входит в аудит VPS / внешнего контура
+## Локально и CI (тот же hardened-стек)
 
-| Файл | Почему |
-|------|--------|
-| [`docker-compose.yml`](../docker-compose.yml) | Локальная разработка: `start-dev`, порты на всех интерфейсах, AMQP `5672` без TLS, debug/OpenAPI. В шапке файла указано «не схема для СБ». |
-| Профиль `ui` / `frontend` в dev compose | Только localhost-разработка. |
+| Файл | Роль |
+|------|------|
+| [`docker-compose.yml`](../docker-compose.yml) | Тонкий `include` → [`docker-compose.vps.yml`](../docker-compose.vps.yml) (без отдельного dev-стека). |
+| [`.env.example`](../.env.example) | Шаблон для localhost (loopback-порты `180xx`, TLS как на VPS). |
+| [`scripts/compose-preflight-tls.sh`](../scripts/compose-preflight-tls.sh) | Генерация TLS перед первым `docker compose up`. |
+| Профиль `ui` / `frontend` | Vite на `127.0.0.1:15173`, бэкенд — loopback `18001`/`18002`/`18080`. |
+| Профиль `tools` / `e2e` | CI: `docker compose -f docker-compose.vps.yml --profile tools run --rm e2e`. |
 
 Скриншоты с **`${MINIO_ROOT_USER:-minio}`** относятся к **старой** версии compose; в актуальной ветке для MinIO: **`${MINIO_ROOT_USER:?set MINIO_ROOT_USER}`** (коммит `7d68832` и новее).
 
