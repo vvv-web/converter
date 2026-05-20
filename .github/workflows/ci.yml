@@ -160,6 +160,9 @@ jobs:
           ./deploy/vps/generate-minio-tls.sh
           # Postgres in alpine runs as UID 70 — keys must be readable after bind-mount.
           sudo chown -R 70:70 deploy/vps/postgres-tls/keycloak_db deploy/vps/postgres-tls/nsi_db deploy/vps/postgres-tls/documents_db
+          sudo chown 999:999 deploy/vps/tls/rabbitmq/server_key.pem deploy/vps/tls/rabbitmq/server_certificate.pem
+          sudo chown 65532:65532 deploy/vps/tls/rabbitmq/client_key.pem deploy/vps/tls/rabbitmq/client_certificate.pem
+          sudo chown -R 65532:65532 deploy/vps/tls/minio
       - name: Up SB stack for e2e
         run: |
           docker compose -f docker-compose.vps.yml up -d --build \
@@ -169,8 +172,7 @@ jobs:
         run: |
           set -euo pipefail
           for i in $(seq 1 120); do
-            if docker compose -f docker-compose.vps.yml exec -T keycloak \
-              sh -c 'wget -q -O- http://127.0.0.1:8080/auth/realms/uom >/dev/null 2>&1'; then
+            if curl -fsS http://127.0.0.1:18080/auth/realms/uom >/dev/null; then
               echo "Keycloak ready (~$((i * 2))s)"
               exit 0
             fi
