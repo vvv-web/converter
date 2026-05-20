@@ -158,6 +158,8 @@ jobs:
           ./deploy/vps/generate-postgres-tls.sh
           ./deploy/vps/generate-rabbitmq-mtls.sh
           ./deploy/vps/generate-minio-tls.sh
+          # Postgres in alpine runs as UID 70 — keys must be readable after bind-mount.
+          sudo chown -R 70:70 deploy/vps/postgres-tls/keycloak_db deploy/vps/postgres-tls/nsi_db deploy/vps/postgres-tls/documents_db
       - name: Up SB stack for e2e
         run: |
           docker compose -f docker-compose.vps.yml up -d --build \
