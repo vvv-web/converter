@@ -143,7 +143,9 @@ docker compose run --rm documents python manage.py makemigrations --check --dry-
 
 ## Обновления по требованиям Службы Безопасности (СБ) - Май 2026
 
-Ветка `sb-security-fixes` создана как отдельный SB-контур: её задача — быть источником правды для hardened VPS-конфигурации, пока изменения не перенесены в канон. Актуальное live-состояние VPS должно совпадать именно с ней, а не с устаревшими ручными hotfix поверх `test`.
+Ветка **`sb-security-fixes`** — **отдельная ветка под СБ** (форк `vvv-web/converter`): источник правды для hardened VPS, пока изменения не перенесены в канон `test`. Live на VPS = эта ветка + `/etc/converter/.env`.
+
+**Для аудита ИБ:** открывать **[`docker-compose.vps.yml`](docker-compose.vps.yml)** и **[`docs/SECURITY-SB-AUDIT-SCOPE.md`](docs/SECURITY-SB-AUDIT-SCOPE.md)** — не [`docker-compose.yml`](docker-compose.yml) (только локальная разработка).
 
 В рамках приведения проекта в соответствие с требованиями ИБ для VPS-профиля зафиксированы следующие требования:
 
