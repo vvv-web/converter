@@ -4,13 +4,14 @@
 
 **Ревизия:** 2026-05-19 — добавлена фиксация по загрузке файлов (N/A) и MinIO; 2026-05-18 — security branch `sb-security-fixes` выровнена с целевым VPS SB-profile: plaintext AMQP отключён, внутренний TLS проверяется клиентами, PostgreSQL TLS включён по умолчанию.
 
-Краткий трекер; детали — в `docs/security-*.md`, `deploy/vps/*`, `infra/keycloak/README-SB.md`.
+Краткий трекер; детали — в `docs/security-*.md`, `deploy/vps/*`, `infra/keycloak/README-SB.md`.  
+**Соответствие резолюциям ИБ (Чумаков / Булатов):** [`security-sb-requirements-mapping.md`](security-sb-requirements-mapping.md).
 
 ---
 
 ## Закрыто в репозитории и на тестовом VPS (технический контур приложения)
 
-- [x] **Публикация портов только на loopback:** в `docker-compose.vps.yml` все `ports:` с префиксом `127.0.0.1:` (Keycloak **18080**, NSI **18001**, documents **18002**, conversion **18003**, RabbitMQ **25672/25673**, MinIO **29000/29001**). Проверка: `ss -tlnp` на хосте, сопоставление с compose; снаружи — **Nginx :443**.
+- [x] **Публикация портов только на loopback:** в `docker-compose.vps.yml` все `ports:` с префиксом `127.0.0.1:` (Keycloak **18080**, NSI **18001**, documents **18002**, conversion **18003**, RabbitMQ **25671/25673**, MinIO **29000/29001**). Проверка: `ss -tlnp` на хосте, сопоставление с compose; снаружи — **Nginx :443**.
 - [x] **Keycloak в продуктивном режиме:** `command` содержит **`start`**, не `start-dev`; `KC_HOSTNAME_STRICT=true` в VPS-схеме.
 - [x] **Redis в стеке не используется** — замечания про неаутентифицированный Redis к **Converter** не применимы; очередь — **RabbitMQ**.
 - [x] **RabbitMQ без guest/guest:** `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` в compose и **`deploy/vps/.env.example`**; `CELERY_BROKER_URL` в **documents** / **documents_worker** через эти переменные. На VPS значения только в **`/etc/converter/.env`** (не в git).

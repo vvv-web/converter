@@ -10,4 +10,4 @@
 
 JWT: проверка `aud` включается переменной **`KEYCLOAK_JWT_AUDIENCE`** (см. `services/*/authn/authentication.py`, `services/conversion/app/main.py`). Без проверки фактического токена Keycloak значение не фиксировать: runbook безопасной проверки — `infra/keycloak/README-SB.md`.
 
-Host header: в `docker-compose.vps.yml` `ALLOWED_HOSTS` задаётся через **`CONVERTER_ALLOWED_HOSTS`**; wildcard `*` оставлять только для локального dev compose.
+Host header: в `docker-compose.vps.yml` `ALLOWED_HOSTS` задаётся через **`CONVERTER_ALLOWED_HOSTS`** (без `*` в прод/SB-профиле).

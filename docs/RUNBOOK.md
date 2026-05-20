@@ -1,5 +1,7 @@
 # RUNBOOK
 
+> **Ветка `sb-security-fixes`:** этот файл — исторический обзор потоков данных. **Аудит ИБ и VPS** — только [`SECURITY-SB-AUDIT-SCOPE.md`](SECURITY-SB-AUDIT-SCOPE.md), [`security-sb-checklist.md`](security-sb-checklist.md), [`docker-compose.vps.yml`](../docker-compose.vps.yml). Порты ниже (**5672**, внутренние **800x**) **не** описывают SB-профиль на VPS.
+
 ## 1. Сервисы и порты
 
 - `keycloak`: `8080`

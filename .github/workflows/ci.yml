@@ -149,6 +149,8 @@ jobs:
       KC_DB_TLS_MODE: verify-server
       KC_DB_TLS_TRUST_STORE_FILE: /etc/postgresql/tls/root.crt
       SEED_PASSWORD: ci_operator_password
+      # CI-only: e2e asserts /api/schema/; VPS/SB profile keeps OPENAPI_PUBLIC_ENABLED=0 (deploy/vps/.env.example).
+      OPENAPI_PUBLIC_ENABLED: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Provision compose TLS (CI)

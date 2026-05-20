@@ -8,7 +8,7 @@
 Security branch `sb-security-fixes` считает PostgreSQL TLS обязательной частью SB-профиля. На VPS TLS всё равно включается только после бэкапа volume и provisioning сертификатов, но итоговое состояние должно совпадать с branch-defaults:
 
 1. `deploy/vps/generate-postgres-tls.sh` генерирует runtime-only CA и server-сертификаты для `keycloak_db`, `nsi_db`, `documents_db`.
-2. `docker-compose.yml` и `docker-compose.vps.yml` монтируют `deploy/vps/postgres-tls/*` read-only и передают PostgreSQL параметры `ssl`, `ssl_cert_file`, `ssl_key_file`.
+2. **`docker-compose.vps.yml`** монтирует `deploy/vps/postgres-tls/*` read-only и передают PostgreSQL параметры `ssl`, `ssl_cert_file`, `ssl_key_file`.
 3. В security branch `CONVERTER_POSTGRES_TLS_ENABLED=on` по умолчанию; на неподготовленном сервере такой deploy должен считаться blocker, а не “деградацией в plaintext”.
 4. Django-сервисы используют `sslmode=verify-full&sslrootcert=/etc/postgresql/tls/root.crt`, то есть проверяют и CA, и имя сервера (`keycloak_db`, `nsi_db`, `documents_db`).
 5. Keycloak использует официальный режим `KC_DB_TLS_MODE=verify-server` и trust store `/etc/postgresql/tls/root.crt`.
@@ -25,7 +25,7 @@ mkdir -p "$backup_dir"
 
 for svc in keycloak_db nsi_db documents_db; do
   echo "===== backup $svc ====="
-  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+  docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml exec -T "$svc" sh -lc \
     'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
     > "$backup_dir/$svc.dump"
   sha256sum "$backup_dir/$svc.dump" > "$backup_dir/$svc.dump.sha256"
@@ -101,17 +101,19 @@ Expected: one line saying the env file was updated and a backup path was created
 
 ```bash
 cd /opt/converter
-docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
-docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak_db nsi_db documents_db
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak nsi documents documents_worker
 
 for svc in keycloak_db nsi_db documents_db; do
   echo "===== $svc ====="
-  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+  docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml exec -T "$svc" sh -lc \
     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -c "SHOW ssl;"'
 done
 ```
 
 Expected: every DB prints `on` for `SHOW ssl;`.
+
+### Аварийный откат (не СБ)
 
 Rollback keeps volumes intact:
 
@@ -136,8 +138,8 @@ for line in env_path.read_text().splitlines():
 env_path.write_text("\n".join(lines) + "\n")
 print(f"updated {env_path} for rollback")
 PY
-docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
-CONVERTER_POSTGRES_TLS_ENABLED=off docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak nsi documents documents_worker
+CONVERTER_POSTGRES_TLS_ENABLED=off docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak_db nsi_db documents_db
 ```
 
 ## Официальная опора
@@ -160,7 +162,7 @@ Run on the VPS in `/opt/converter`. Do not print `.env` values.
 
 ```bash
 cd /opt/converter
-docker compose -f docker-compose.yml ps keycloak_db nsi_db documents_db
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml ps keycloak_db nsi_db documents_db
 docker volume inspect converter_keycloak_db converter_nsi_db converter_documents_db --format '{{ .Name }} -> {{ .Mountpoint }}'
 ```
 
@@ -173,7 +175,7 @@ mkdir -p "$backup_dir"
 
 for svc in keycloak_db nsi_db documents_db; do
   echo "===== backup $svc ====="
-  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+  docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml exec -T "$svc" sh -lc \
     'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
     > "$backup_dir/$svc.dump"
   sha256sum "$backup_dir/$svc.dump" > "$backup_dir/$svc.dump.sha256"
@@ -223,8 +225,8 @@ Deploy one DB at a time, then clients:
 
 ```bash
 cd /opt/converter
-docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
-docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak_db nsi_db documents_db
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak nsi documents documents_worker
 ```
 
 ## Verification
@@ -235,7 +237,7 @@ Server-side PostgreSQL TLS:
 cd /opt/converter
 for svc in keycloak_db nsi_db documents_db; do
   echo "===== $svc ====="
-  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+  docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml exec -T "$svc" sh -lc \
     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -c "SHOW ssl;" -c "SHOW ssl_cert_file;" -c "SHOW ssl_key_file;"'
 done
 ```
@@ -248,7 +250,7 @@ Client-side encrypted sessions:
 cd /opt/converter
 for svc in nsi_db documents_db keycloak_db; do
   echo "===== $svc ====="
-  docker compose -f docker-compose.yml exec -T "$svc" sh -lc \
+  docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml exec -T "$svc" sh -lc \
     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -c "SELECT usename, ssl, version FROM pg_stat_ssl JOIN pg_stat_activity USING (pid) WHERE usename = current_user;"'
 done
 ```
@@ -264,7 +266,9 @@ curl -vkI https://converter.acom-offer-desk.ru/auth/realms/uom/.well-known/openi
 
 Expected: Converter returns HTTP response, OIDC discovery returns `200`.
 
-## Rollback
+## Rollback (авария; не профиль СБ)
+
+> Отключение TLS (**`CONVERTER_POSTGRES_TLS_ENABLED=off`**) **не соответствует** принятому SB-профилю. Блок ниже — только для восстановления доступности до повторного включения TLS по согласованию с ИБ.
 
 Disable client TLS first:
 
@@ -273,14 +277,14 @@ cd /opt/converter
 sudo cp deploy/vps/.env deploy/vps/.env.before-db-tls-rollback.$(date +%Y%m%d-%H%M%S)
 sudo sed -i '/^CONVERTER_POSTGRES_TLS_ENABLED=/d;/^KC_DB_TLS_MODE=/d;/^KC_DB_TLS_TRUST_STORE_FILE=/d' deploy/vps/.env
 sudo sed -i 's/[?&]sslmode=require//g' deploy/vps/.env
-docker compose -f docker-compose.yml up -d keycloak nsi documents documents_worker
+docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak nsi documents documents_worker
 ```
 
 If a PostgreSQL container fails to start because of certificate permissions, keep data volumes intact and start with TLS disabled:
 
 ```bash
 cd /opt/converter
-CONVERTER_POSTGRES_TLS_ENABLED=off docker compose -f docker-compose.yml up -d keycloak_db nsi_db documents_db
+CONVERTER_POSTGRES_TLS_ENABLED=off docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d keycloak_db nsi_db documents_db
 ```
 
 Do not remove DB volumes during rollback.

@@ -1,6 +1,6 @@
 # Аудит СБ — область ветки `sb-security-fixes`
 
-Ветка **`sb-security-fixes`** в форке `vvv-web/converter` — **отдельный контур под требования Службы безопасности**, не замена ветки `test` / `main` для ежедневной разработки.
+Ветка **`sb-security-fixes`** в форке `vvv-web/converter` — **отдельный контур под требования Службы безопасности**. Ветка создана **специально для СБ**; описания «локальной разработки» и старый dev-compose **удалены** — единый hardened-манифест для VPS и проверок.
 
 ## Для проверяющего ИБ (с чего начать)
 
@@ -13,21 +13,24 @@
 | 5 | Runbook VPS / approved deploy | [`deploy/vps/README.md`](../deploy/vps/README.md) |
 | 6 | Автопроверка compose (как в CI) | [`.github/scripts/check_vps_compose_security.py`](../.github/scripts/check_vps_compose_security.py) |
 | 7 | Проверка MinIO + отсутствие upload | [`scripts/security-verify-minio-and-upload-posture.sh`](../scripts/security-verify-minio-and-upload-posture.sh) |
-| 8 | Канон формулировок R-* (все проекты) | https://github.com/vvv-web/security-board-requirements |
+| 8 | Соответствие резолюциям ИБ (Чумаков / Булатов) | [`docs/security-sb-requirements-mapping.md`](security-sb-requirements-mapping.md) |
+| 9 | Канон формулировок R-* (все проекты) | https://github.com/vvv-web/security-board-requirements |
 
 **Живой хост:** checkout `/opt/converter` на ветке `sb-security-fixes`, секреты только в **`/etc/converter/.env`** (chmod `600`, не в git).
 
-## Локально и CI (тот же hardened-стек)
+## CI (не VPS)
 
-| Файл | Роль |
-|------|------|
-| [`docker-compose.yml`](../docker-compose.yml) | Тонкий `include` → [`docker-compose.vps.yml`](../docker-compose.vps.yml) (без отдельного dev-стека). |
-| [`.env.example`](../.env.example) | Шаблон для localhost (loopback-порты `180xx`, TLS как на VPS). |
-| [`scripts/compose-preflight-tls.sh`](../scripts/compose-preflight-tls.sh) | Генерация TLS перед первым `docker compose up`. |
-| Профиль `ui` / `frontend` | Vite на `127.0.0.1:15173`, бэкенд — loopback `18001`/`18002`/`18080`. |
-| Профиль `tools` / `e2e` | CI: `docker compose -f docker-compose.vps.yml --profile tools run --rm e2e`. |
+GitHub Actions проверяет тот же `docker-compose.vps.yml` (через `include` в `docker-compose.yml`). **Аудит VPS и служебка ИБ** — только таблица выше; CI не является целевым контуром эксплуатации.
 
-Скриншоты с **`${MINIO_ROOT_USER:-minio}`** относятся к **старой** версии compose; в актуальной ветке для MinIO: **`${MINIO_ROOT_USER:?set MINIO_ROOT_USER}`** (коммит `7d68832` и новее).
+Скриншоты с **`${MINIO_ROOT_USER:-minio}`** — **устаревший** compose; в ветке: **`${MINIO_ROOT_USER:?set MINIO_ROOT_USER}`**.
+
+## Вне области аудита VPS
+
+| Путь | Почему не для служебки |
+|------|-------------------------|
+| `docs/RUNBOOK.md`, `docs/PROJECT_OVERVIEW_CANVAS.md` | Исторические обзоры; порты/схемы могут не совпадать с VPS |
+| `frontend/README.md` | Сборка UI; периметр — Nginx + Keycloak на VPS |
+| Профиль compose `ui` | Опционально для сборки; **не** публикуется в аудит периметра |
 
 ## Соответствие live VPS
 
