@@ -109,7 +109,11 @@ jobs:
           python manage.py check
           python manage.py test documents_service.tests -v 2
           python manage.py makemigrations --check --dry-run
-      - run: pytest -q --collect-only services/e2e/tests
+      - name: Collect e2e tests (import-only; env stubs)
+        env:
+          RABBITMQ_DEFAULT_PASS: ci_collect_stub
+          SEED_PASSWORD: ci_collect_stub
+        run: pytest -q --collect-only services/e2e/tests
 
   e2e-smoke:
     runs-on: ubuntu-latest
