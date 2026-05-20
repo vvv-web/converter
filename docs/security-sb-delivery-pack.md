@@ -9,7 +9,7 @@
 - [ ] `docs/security-sb-file-upload-and-minio.md` (позиция по upload N/A и MinIO для СЗ).
 - [ ] Вывод `./scripts/security-verify-minio-and-upload-posture.sh` (на VPS, без секретов).
 - [ ] `docs/security-asset-register.md` (заполненный шаблон без секретов).
-- [ ] Инструкция развёртывания: `deploy/vps/README.md` + `docs/RUNBOOK.md` §10.
+- [ ] Инструкция развёртывания: `deploy/vps/README.md`, `docs/SECURITY-SB-AUDIT-SCOPE.md`.
 
 ## Команды для артефактов (выполнять из корня репозитория Converter)
 

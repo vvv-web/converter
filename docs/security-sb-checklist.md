@@ -24,6 +24,8 @@
 - [x] **OpenAPI / Swagger в прод-схеме:** `OPENAPI_PUBLIC_ENABLED=0` по умолчанию в сервисах; анонимные бизнес-эндпоинты — отдельная проверка по `docs/security-api-hardening.md`.
 - [x] **PyJWT (замечание СБ):** **`PyJWT[crypto]==2.12.0`** в **nsi / documents / conversion** `requirements.txt`; образы пересобираются с этой версией (носитель: `02_obrazy/*.tar`, `HESH-GIT-KOMITA.txt`).
 - [x] **Выкат на VPS (требование СБ):** автодеплой **не используется**; развёртывание на текущем VPS — **только вручную по согласованной процедуре**; до переноса hardening в канон источником правды для VPS является **`sb-security-fixes`**.
+- [x] **Публикация на хосте vs внутри контейнера:** на хосте только `127.0.0.1:*`; `runserver 0.0.0.0:8000` и `npm run dev --host 0.0.0.0` — **внутри** сети Docker (не публикация на `0.0.0.0` хоста). Профиль `ui`/`frontend` — не периметр VPS.
+- [ ] **Bind-mount `./services/*` на VPS:** в `docker-compose.vps.yml` есть монтирование исходников для `up --build`; при аудите «образ без исходников на диске» — отдельное согласование с ИБ (образы уже на носителе / `docker save`).
 - [x] **Approved deploy:** явное подтверждение выката, без «тихого» `git reset --hard` — `deploy/vps/manual-approved-deploy.sh.example` (см. `deploy/vps/README.md`).
 - [x] **Документация под аудит:** `deploy/vps/AUTODEPLOY-SB-NOTES.md` (история/запрет автодеплоя), `SECRET-STORAGE-NOTES.md`, `docs/security-sb-organizational-controls.md`, `docs/security-sb-mtls-scope.md`, `docs/security-sb-delivery-pack.md`, проверка compose в CI (`.github/scripts/check_vps_compose_security.py` и др. по факту в репо).
 - [x] **Реестр активов (шаблон):** `docs/security-asset-register.md` (хост, FQDN, назначение).

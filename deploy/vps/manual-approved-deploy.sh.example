@@ -12,11 +12,12 @@ flock -n 9 || {
 
 REPO_DIR="${REPO_DIR:-/opt/converter}"
 REMOTE="${REMOTE:-origin}"
-BRANCH="${BRANCH:-test}"
+BRANCH="${BRANCH:-sb-security-fixes}"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:?set EXPECTED_COMMIT to the approved commit sha}"
 APPROVAL_MARKER="${APPROVAL_MARKER:-${REPO_DIR}/.approved-deploy-${EXPECTED_COMMIT}}"
 BACKUP_ROOT="${BACKUP_ROOT:-/opt/converter-backups}"
-COMPOSE=(docker compose --env-file deploy/vps/.env -f docker-compose.vps.yml)
+ENV_FILE="${ENV_FILE:-/etc/converter/.env}"
+COMPOSE=(docker compose --env-file "${ENV_FILE}" -f docker-compose.vps.yml)
 
 cd "$REPO_DIR"
 

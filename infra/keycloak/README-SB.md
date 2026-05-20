@@ -45,7 +45,7 @@ docker compose -f docker-compose.vps.yml exec keycloak /opt/keycloak/bin/kcadm.s
 
 ## Клиенты `redirectUris` / `webOrigins`
 
-В dev-экспорте могут быть широкие шаблоны. Для прода сузить под реальный HTTPS-ориджин фронта (см. служебку СБ). Правки — в отдельной ветке форка и ревью перед merge в `test`.
+В realm-export могут быть шаблоны под localhost для CI. На VPS задайте `CONVERTER_PUBLIC_ORIGIN` / `KC_HOSTNAME*` в `/etc/converter/.env` под реальный HTTPS-ориджин (см. служебку СБ).
 
 ## `KEYCLOAK_JWT_AUDIENCE`
 

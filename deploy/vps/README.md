@@ -4,28 +4,15 @@
 
 **SB-ветка:** `sb-security-fixes` — источник правды для hardening-контура VPS. Именно эта ветка должна совпадать с live-конфигурацией `converter` на хосте, пока замечания СБ не будут полностью перенесены в канон.
 
-**Канон (upstream):** `https://github.com/vldsmelov/converter`, рабочая ветка выката обычно **`test`**.
+**Live VPS (аудит СБ):** checkout `/opt/converter`, ветка **`sb-security-fixes`**, env **`/etc/converter/.env`** (chmod `600`).
 
-## Актуальность форка относительно `test`
-
-На машине разработчика:
-
-```bash
-git remote add fork https://github.com/vvv-web/converter.git   # один раз
-git remote update
-git rev-parse origin/test    # vldsmelov
-git rev-parse fork/test      # vvv-web
-```
-
-Если SHA **совпадают** — ветка `test` форка выровнена с `test` канона. Для security-контура проверяйте отдельно `fork/sb-security-fixes`: именно она должна описывать текущий VPS hardening без drift-а.
-
-Локальный клон может иметь `origin` на vldsmelov или на форк — ориентируйтесь на URL `git remote -v`.
+Перенос hardening в канон **`test`** / upstream — **после** приёмки СБ, отдельным merge (не предмет этой ветки).
 
 ## Файлы
 
 | Файл | Назначение |
 |------|------------|
-| `../docker-compose.vps.yml` | Прод-стек: loopback-порты, пины версий образов, без dev bind-mount кода. |
+| `../docker-compose.vps.yml` | Прод-стек СБ: loopback на хосте, pin `@sha256`, TLS; bind-mount `./services/*` — для выката с пересборкой образов на хосте (см. `manual-approved-deploy.sh.example`). |
 | `.env.example` | Шаблон переменных; реальный env-файл живёт на сервере в `/etc/converter/.env` и **не коммитится**. |
 | `nginx/converter-upstreams.conf.example` | Пример upstream на `127.0.0.1` для Nginx на хосте. |
 | `keycloak-import/README.md` | Куда класть prod JSON realm без секретов. |
@@ -78,11 +65,12 @@ docker compose --env-file /etc/converter/.env -f docker-compose.vps.yml up -d --
 
 ```bash
 cd /opt/converter
-git fetch origin test
+git fetch origin sb-security-fixes
 git log --oneline --decorate -n 5 HEAD..FETCH_HEAD
 APPROVED_COMMIT="$(git rev-parse FETCH_HEAD)"
 touch "/opt/converter/.approved-deploy-${APPROVED_COMMIT}"
-EXPECTED_COMMIT="${APPROVED_COMMIT}" /usr/local/bin/converter-manual-approved-deploy.sh
+REMOTE=origin BRANCH=sb-security-fixes EXPECTED_COMMIT="${APPROVED_COMMIT}" \
+  /usr/local/bin/converter-manual-approved-deploy.sh
 ```
 
 Рабочий скрипт на сервере берётся из `deploy/vps/manual-approved-deploy.sh.example` и устанавливается без суффикса `.example`, например в `/usr/local/bin/converter-manual-approved-deploy.sh` с правами `750`. Реальные секреты остаются только в `/etc/converter/.env` на VPS.

@@ -66,6 +66,12 @@ deploy/vps/tls/rabbitmq/*.key
 deploy/vps/tls/rabbitmq/ca.srl
 deploy/vps/tls/minio/
 
+# Офлайн-носитель СБ (образы на флешке) — не в git
+Converter-nositel-dlya-SB/
+architecture-report.html
+converter-checklist-schema-vps.png
+*.docx
+
 # --- Frontend (Vite/React/TS) ---
 frontend/node_modules/
 frontend/dist/
